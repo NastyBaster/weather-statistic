@@ -22,9 +22,15 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
+      - name: Build environment-specific site
+        run: npm run build -- --require-config
+        env:
+          APP_ENVIRONMENT: ${{ github.event_name == 'push' && 'production' || 'development' }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       - name: Deploy to Cloudflare Pages
         run: >-
-          npx --yes wrangler@4 pages deploy .
+          npx --yes wrangler@4 pages deploy dist
           --project-name=forecast-reality-check
           --branch=${{ github.event.pull_request.head.ref || 'main' }}
         env:

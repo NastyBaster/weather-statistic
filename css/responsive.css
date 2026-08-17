@@ -23,6 +23,17 @@
     display: none;
   }
 
+  .connection-status [data-connection-label] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .hero {
     min-height: 410px;
     padding-top: 55px;

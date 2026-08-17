@@ -1,3 +1,5 @@
+import { initializeConnectionStatus } from "./connection-status.js";
+
 const cityData = {
   kyiv: {
     title: "Київ · 7 серпня",
@@ -92,3 +94,4 @@ sortButton.addEventListener("click", () => {
 });
 
 render();
+initializeConnectionStatus();

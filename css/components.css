@@ -58,6 +58,47 @@ nav {
   cursor: pointer;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.connection-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 3px rgb(148 203 211 / 20%);
+}
+
+.connection-status[data-state="connected"] {
+  color: var(--green);
+}
+
+.connection-status[data-state="connected"] i {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgb(30 104 73 / 16%);
+}
+
+.connection-status[data-state="error"] {
+  color: #8a321b;
+}
+
+.connection-status[data-state="error"] i {
+  background: var(--orange);
+  box-shadow: 0 0 0 3px rgb(255 132 92 / 18%);
+}
+
 .eyebrow {
   margin: 0 0 14px;
   color: var(--green);

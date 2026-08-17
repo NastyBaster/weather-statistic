@@ -9,6 +9,7 @@
     />
     <title>Forecast Reality Check</title>
     <link rel="stylesheet" href="css/styles.css" />
+    <script src="runtime-config.js"></script>
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
@@ -24,7 +25,13 @@
         <a class="nav-link nav-link--active" href="#overview">Огляд</a>
         <a class="nav-link" href="#history">Історія</a>
       </nav>
-      <button class="avatar" type="button" aria-label="Відкрити профіль">АК</button>
+      <div class="header-actions">
+        <span class="connection-status" id="connection-status" role="status" aria-live="polite">
+          <i aria-hidden="true"></i>
+          <span data-connection-label>Перевіряємо Supabase…</span>
+        </span>
+        <button class="avatar" type="button" aria-label="Відкрити профіль">АК</button>
+      </div>
     </header>
 
     <main>
