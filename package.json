@@ -1,0 +1,14 @@
+{
+  "name": "forecast-reality-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "test": "node --test",
+    "check": "node --check js/app.js && node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
