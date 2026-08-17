@@ -1,0 +1,15 @@
+:root {
+  color-scheme: light;
+  --ink: #17231d;
+  --muted: #637068;
+  --paper: #f4f2e9;
+  --card: #fffdf7;
+  --line: #d8dbd1;
+  --green: #1e6849;
+  --lime: #cbea70;
+  --orange: #ff845c;
+  --blue: #94cbd3;
+  --shadow: 0 20px 45px rgb(34 48 40 / 9%);
+  --content-width: 1180px;
+  --page-gutter: 40px;
+}

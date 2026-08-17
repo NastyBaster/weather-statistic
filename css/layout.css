@@ -1,0 +1,24 @@
+.site-header,
+main,
+footer {
+  width: min(var(--content-width), calc(100% - var(--page-gutter)));
+  margin-inline: auto;
+}
+
+.site-header {
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+footer {
+  margin-top: 50px;
+  padding: 26px 0 38px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.75rem;
+}

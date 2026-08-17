@@ -1,0 +1,85 @@
+/* Responsive overrides live here so breakpoints stay easy to audit. */
+@media (max-width: 850px) {
+  .hero {
+    grid-template-columns: 1fr;
+    padding: 80px 0 35px;
+  }
+
+  .hero__weather {
+    display: none;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --page-gutter: 24px;
+  }
+
+  nav {
+    display: none;
+  }
+
+  .connection-status [data-connection-label] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .hero {
+    min-height: 410px;
+    padding-top: 55px;
+  }
+
+  h1 {
+    font-size: 3.4rem;
+  }
+
+  .dashboard,
+  .history {
+    padding: 22px 16px;
+    border-radius: 18px;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  select {
+    width: 100%;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    min-height: 155px;
+  }
+
+  footer {
+    gap: 10px;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

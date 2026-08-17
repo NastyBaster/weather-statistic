@@ -1,0 +1,155 @@
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.brand__mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--green);
+  font-weight: 800;
+}
+
+.brand strong,
+.brand small {
+  display: block;
+}
+
+.brand small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+nav {
+  display: flex;
+  gap: 34px;
+}
+
+.nav-link {
+  padding: 31px 0 27px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.nav-link--active {
+  color: var(--green);
+  border-bottom: 3px solid var(--green);
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--lime);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.connection-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 3px rgb(148 203 211 / 20%);
+}
+
+.connection-status[data-state="connected"] {
+  color: var(--green);
+}
+
+.connection-status[data-state="connected"] i {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgb(30 104 73 / 16%);
+}
+
+.connection-status[data-state="error"] {
+  color: #8a321b;
+}
+
+.connection-status[data-state="error"] i {
+  background: var(--orange);
+  box-shadow: 0 0 0 3px rgb(255 132 92 / 18%);
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--green);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.select-label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+select {
+  min-width: 210px;
+  padding: 11px 38px 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--card);
+}
+
+.sort-button {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.difference-pill {
+  min-width: 52px;
+  padding: 5px 8px;
+  display: inline-block;
+  border-radius: 99px;
+  color: #8a321b;
+  background: #ffe1d7;
+  text-align: center;
+  font-weight: 750;
+}
