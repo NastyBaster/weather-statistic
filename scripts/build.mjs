@@ -24,7 +24,7 @@ validateConfig();
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 
-for (const path of ["index.html", "css", "js"]) {
+for (const path of ["index.html", "login.html", "reset-password.html", "css", "js"]) {
   await cp(resolve(root, path), resolve(output, path), { recursive: true });
 }
 

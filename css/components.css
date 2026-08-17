@@ -58,6 +58,67 @@ nav {
   cursor: pointer;
 }
 
+.button {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: white;
+  background: var(--green);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(0.94);
+}
+
+.button:focus-visible,
+input:focus-visible,
+.text-link:focus-visible {
+  outline: 3px solid rgb(30 104 73 / 25%);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.button--secondary {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--card);
+}
+
+.button--compact {
+  min-height: 38px;
+  padding-inline: 14px;
+}
+
+.user-email {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  border: 3px solid rgb(30 104 73 / 22%);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .header-actions {
   display: flex;
   align-items: center;

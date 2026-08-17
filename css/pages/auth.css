@@ -1,0 +1,132 @@
+.auth-pending {
+  overflow: hidden;
+}
+
+.page-loader {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.auth-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 16%, rgb(203 234 112 / 45%), transparent 25rem),
+    radial-gradient(circle at 88% 84%, rgb(148 203 211 / 38%), transparent 28rem),
+    var(--paper);
+}
+
+.auth-shell {
+  width: min(100% - 32px, 470px);
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+  gap: 28px;
+  margin-inline: auto;
+  padding-block: 40px;
+}
+
+.auth-brand {
+  width: max-content;
+  margin-inline: auto;
+}
+
+.auth-card {
+  padding: clamp(28px, 7vw, 48px);
+  border: 1px solid rgb(216 219 209 / 80%);
+  border-radius: 26px;
+  background: rgb(255 253 247 / 92%);
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1 {
+  font-size: clamp(2.6rem, 10vw, 4rem);
+  letter-spacing: -0.05em;
+}
+
+.auth-intro {
+  margin: 14px 0 26px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 24px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.auth-tab {
+  padding: 9px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.auth-tab--active {
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: 0 3px 12px rgb(34 48 40 / 8%);
+}
+
+.auth-form,
+.auth-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-form {
+  gap: 18px;
+}
+
+.auth-form label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  background: white;
+}
+
+.form-message {
+  min-height: 22px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.form-message[data-state="error"] { color: #9a351e; }
+.form-message[data-state="success"] { color: var(--green); }
+
+.text-link {
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  color: var(--green);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

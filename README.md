@@ -12,7 +12,16 @@ npm run dev
 
 Відкрийте <http://localhost:4173>.
 
-Без локальної Supabase-конфігурації застосунок працює з демонстраційними даними й показує відповідний статус. Production і PR preview отримують `SUPABASE_URL` та `SUPABASE_PUBLISHABLE_KEY` із GitHub Environment variables під час `npm run build`.
+Без локальної Supabase-конфігурації protected dashboard перенаправляє на сторінку входу, де буде показано помилку конфігурації. Production і PR preview отримують `SUPABASE_URL` та `SUPABASE_PUBLISHABLE_KEY` із GitHub Environment variables під час `npm run build`.
+
+## Авторизація
+
+- `login.html` підтримує реєстрацію та вхід через email/password, а також надсилання листа для відновлення пароля.
+- `reset-password.html` приймає recovery session із Supabase та дозволяє встановити новий пароль.
+- `index.html` є захищеним dashboard: сесія відновлюється перед показом вмісту, а неавторизованого користувача буде перенаправлено на сторінку входу.
+- Для локальної перевірки згенеруйте `runtime-config.js` через `SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... npm run build`, а потім обслуговуйте каталог `dist` статичним сервером.
+
+У Supabase Authentication → URL Configuration додайте локальний URL `http://localhost:4173/reset-password.html`, URL PR preview та production URL до Redirect URLs. Не використовуйте wildcard production-домену ширший, ніж потрібно.
 
 ## Структура стилів
 
@@ -43,6 +52,6 @@ npm run check
 
 ## Supabase
 
-Початкова міграція `supabase/migrations/202608170001_create_profiles_and_locations.sql` створює `profiles`, `locations`, індекси, RLS-політики та публічну RPC-перевірку `health_check`.
+Початкова міграція `supabase/migrations/202608170001_create_profiles_and_locations.sql` створює `profiles`, `locations`, індекси, RLS-політики та публічну RPC-перевірку `health_check`. Міграція `supabase/migrations/202608170002_create_profile_on_signup.sql` додає trigger, який автоматично створює `profiles` після реєстрації користувача.
 
-Застосовуйте міграцію спочатку до `weather-statistic-dev`, перевіряйте PR preview, а після схвалення — до `weather-statistic-prod`. Не додавайте database password, secret key або `service_role` key у браузерну конфігурацію.
+Застосовуйте кожну нову міграцію спочатку до `weather-statistic-dev`, перевіряйте реєстрацію, RLS та PR preview, а після схвалення — до `weather-statistic-prod`. Не редагуйте вже застосовані міграції та не додавайте database password, secret key або `service_role` key у браузерну конфігурацію.
