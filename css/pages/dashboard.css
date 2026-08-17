@@ -1,0 +1,238 @@
+.hero {
+  min-height: 450px;
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  align-items: center;
+  gap: 40px;
+}
+
+h1 {
+  max-width: 760px;
+  font-size: clamp(3rem, 6.4vw, 5.8rem);
+  line-height: 0.94;
+  letter-spacing: -0.055em;
+}
+
+h1 em {
+  color: var(--green);
+  font-weight: 500;
+}
+
+.hero__copy {
+  max-width: 580px;
+  margin: 26px 0 0;
+  color: var(--muted);
+  font-size: 1.07rem;
+  line-height: 1.7;
+}
+
+.hero__weather {
+  position: relative;
+  height: 260px;
+}
+
+.sun {
+  position: absolute;
+  width: 155px;
+  height: 155px;
+  top: 14px;
+  right: 62px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 0 18px rgb(203 234 112 / 20%);
+}
+
+.cloud {
+  position: absolute;
+  right: 20px;
+  bottom: 38px;
+  width: 280px;
+  height: 78px;
+  border-radius: 60px;
+  background: var(--blue);
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.cloud::before {
+  width: 120px;
+  height: 120px;
+  left: 50px;
+  bottom: 5px;
+}
+
+.cloud::after {
+  width: 145px;
+  height: 145px;
+  right: 28px;
+  bottom: 0;
+}
+
+.cloud--front {
+  right: 92px;
+  bottom: 8px;
+  width: 230px;
+  height: 65px;
+  background: white;
+}
+
+.cloud--back {
+  opacity: 0.72;
+  transform: scale(0.78);
+  transform-origin: right bottom;
+}
+
+.dashboard,
+.history {
+  margin-bottom: 28px;
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgb(255 253 247 / 78%);
+  box-shadow: var(--shadow);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.stat-card {
+  min-height: 185px;
+  padding: 23px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.stat-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.stat-card strong {
+  display: block;
+  margin: 16px 0 12px;
+  font-family: Georgia, serif;
+  font-size: 3.4rem;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+
+.stat-card sup {
+  margin-left: 2px;
+  font-family: inherit;
+  font-size: 1.25rem;
+}
+
+.stat-card__note {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.stat-card--forecast { border-top: 4px solid var(--orange); }
+.stat-card--actual { border-top: 4px solid var(--green); }
+.stat-card--difference { border-top: 4px solid var(--blue); }
+.stat-card--score { border-top: 4px solid var(--lime); }
+
+.actual-legend {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.actual-legend i {
+  width: 22px;
+  display: inline-block;
+  border-top: 2px dashed var(--green);
+  vertical-align: middle;
+}
+
+.chart-wrap,
+.table-wrap {
+  overflow-x: auto;
+}
+
+.chart {
+  position: relative;
+  min-width: 650px;
+  height: 235px;
+  margin-bottom: 24px;
+  padding: 20px 12px 34px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  border-bottom: 1px solid var(--line);
+  background-image: linear-gradient(to bottom, transparent 49%, var(--line) 50%, transparent 51%);
+  background-size: 100% 25%;
+}
+
+.chart::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--actual-line);
+  border-top: 2px dashed var(--green);
+  opacity: 0.65;
+}
+
+.chart__column {
+  position: relative;
+  z-index: 1;
+  width: 55px;
+  height: var(--height);
+  border-radius: 8px 8px 2px 2px;
+  background: var(--orange);
+  transition: height 0.35s ease;
+}
+
+.chart__value {
+  position: absolute;
+  top: -24px;
+  width: 100%;
+  text-align: center;
+  font-weight: 800;
+}
+
+.chart__label {
+  position: absolute;
+  bottom: -27px;
+  width: 100%;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.72rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+th,
+td {
+  padding: 15px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+td {
+  font-size: 0.9rem;
+}
