@@ -12,12 +12,7 @@
     <script src="runtime-config.js"></script>
     <script type="module" src="js/app.js"></script>
   </head>
-  <body class="auth-pending" data-protected-page>
-    <div class="page-loader" data-auth-loader role="status" aria-live="polite">
-      <span class="spinner" aria-hidden="true"></span>
-      <span>Відновлюємо сесію…</span>
-    </div>
-    <div class="protected-content" data-protected-content hidden>
+  <body>
     <header class="site-header">
       <a class="brand" href="#" aria-label="Forecast Reality Check — головна">
         <span class="brand__mark" aria-hidden="true">F°</span>
@@ -35,8 +30,11 @@
           <i aria-hidden="true"></i>
           <span data-connection-label>Перевіряємо Supabase…</span>
         </span>
-        <span class="user-email" data-user-email></span>
-        <button class="button button--secondary button--compact" data-sign-out type="button">
+        <span class="user-email" data-user-email hidden></span>
+        <a class="button button--secondary button--compact" data-sign-in href="login.html">
+          Увійти
+        </a>
+        <button class="button button--secondary button--compact" data-sign-out type="button" hidden>
           Вийти
         </button>
       </div>
@@ -134,6 +132,5 @@
       <p>Навчальний проєкт про точність прогнозів</p>
       <p>Дані на екрані поки демонстраційні</p>
     </footer>
-    </div>
   </body>
 </html>

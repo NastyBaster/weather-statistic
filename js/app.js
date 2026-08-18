@@ -1,5 +1,5 @@
 import { initializeConnectionStatus } from "./connection-status.js";
-import { protectDashboard } from "./dashboard-auth.js";
+import { initializeDashboardAuth } from "./dashboard-auth.js";
 
 const cityData = {
   kyiv: {
@@ -94,8 +94,6 @@ sortButton.addEventListener("click", () => {
   render();
 });
 
-protectDashboard().then((isAuthenticated) => {
-  if (!isAuthenticated) return;
-  render();
-  initializeConnectionStatus();
-});
+render();
+initializeConnectionStatus();
+initializeDashboardAuth();

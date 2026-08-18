@@ -142,6 +142,42 @@
   background: white;
 }
 
+.password-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.password-field input {
+  padding-right: 52px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  width: 42px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.password-toggle:focus-visible {
+  outline: 3px solid rgb(30 104 73 / 25%);
+  outline-offset: 1px;
+}
+
 .form-message {
   min-height: 22px;
   margin: 14px 0 0;

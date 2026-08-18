@@ -66,6 +66,7 @@ nav {
   color: white;
   background: var(--green);
   font-weight: 750;
+  text-decoration: none;
   cursor: pointer;
 }
 

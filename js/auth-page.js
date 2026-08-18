@@ -7,6 +7,7 @@ import {
 } from "./auth.js";
 import { authErrorMessage } from "./auth-error.js";
 import { initializeEnvironmentBadge } from "./environment-badge.js";
+import { initializePasswordVisibility } from "./password-visibility.js";
 
 const form = document.querySelector("[data-auth-form]");
 const message = document.querySelector("[data-form-message]");
@@ -15,6 +16,7 @@ const passwordInput = form.elements.password;
 let mode = "signin";
 
 initializeEnvironmentBadge();
+initializePasswordVisibility();
 
 function showMessage(text, state = "") {
   message.textContent = text;

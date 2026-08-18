@@ -27,8 +27,16 @@
         </div>
 
         <form class="auth-form" data-auth-form novalidate>
-          <label>Email<input type="email" name="email" autocomplete="email" required /></label>
-          <label>Пароль<input type="password" name="password" autocomplete="current-password" minlength="8" required /></label>
+          <label>Email<input type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required /></label>
+          <label>
+            <span>Пароль</span>
+            <span class="password-field">
+              <input type="password" name="password" autocomplete="current-password" minlength="8" required />
+              <button class="password-toggle" data-password-toggle type="button" aria-label="Показати пароль" aria-pressed="false">
+                <span aria-hidden="true">👁</span>
+              </button>
+            </span>
+          </label>
           <button class="button" data-submit type="submit">Увійти</button>
         </form>
         <p class="form-message" data-form-message role="status" aria-live="polite"></p>

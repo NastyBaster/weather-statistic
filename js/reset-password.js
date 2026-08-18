@@ -1,12 +1,14 @@
 import { dashboardUrl, getCurrentSession, updatePassword } from "./auth.js";
 import { authErrorMessage } from "./auth-error.js";
 import { initializeEnvironmentBadge } from "./environment-badge.js";
+import { initializePasswordVisibility } from "./password-visibility.js";
 
 const form = document.querySelector("[data-reset-form]");
 const message = document.querySelector("[data-form-message]");
 const submitButton = document.querySelector("[data-submit]");
 
 initializeEnvironmentBadge();
+initializePasswordVisibility();
 
 function showMessage(text, state = "") {
   message.textContent = text;

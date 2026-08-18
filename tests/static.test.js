@@ -25,11 +25,12 @@ test("authentication pages load configuration before their modules", async () =>
   }
 });
 
-test("dashboard is protected and authentication supports the complete email flow", async () => {
+test("dashboard stays public while authentication supports the complete email flow", async () => {
   const html = await readFile(new URL("index.html", root), "utf8");
   const auth = await readFile(new URL("js/auth.js", root), "utf8");
-  const guard = await readFile(new URL("js/dashboard-auth.js", root), "utf8");
-  assert.match(html, /data-protected-page/);
+  const dashboardAuth = await readFile(new URL("js/dashboard-auth.js", root), "utf8");
+  assert.doesNotMatch(html, /data-protected-page/);
+  assert.match(html, /data-sign-in/);
   assert.match(html, /data-sign-out/);
   assert.match(auth, /auth\.getSession\(\)/);
   assert.match(auth, /auth\.signUp/);
@@ -38,7 +39,16 @@ test("dashboard is protected and authentication supports the complete email flow
   assert.match(auth, /auth\.signOut/);
   assert.match(auth, /auth\.resetPasswordForEmail/);
   assert.match(auth, /auth\.updateUser/);
-  assert.match(guard, /SIGNED_OUT/);
+  assert.match(dashboardAuth, /renderSession/);
+});
+
+test("password inputs support browser autofill and a visibility control", async () => {
+  const login = await readFile(new URL("login.html", root), "utf8");
+  const visibility = await readFile(new URL("js/password-visibility.js", root), "utf8");
+  assert.match(login, /autocomplete="username"/);
+  assert.match(login, /data-password-toggle/);
+  assert.match(visibility, /input\.type = visible \? "text" : "password"/);
+  assert.match(visibility, /aria-pressed/);
 });
 
 test("authentication errors are localized for common Supabase failures", async () => {
