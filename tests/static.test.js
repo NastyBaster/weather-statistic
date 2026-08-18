@@ -47,6 +47,8 @@ test("password inputs support browser autofill and a visibility control", async 
   const visibility = await readFile(new URL("js/password-visibility.js", root), "utf8");
   assert.match(login, /autocomplete="username"/);
   assert.match(login, /data-password-toggle/);
+  assert.match(login, /password-icon--show/);
+  assert.match(login, /password-icon--hide/);
   assert.match(visibility, /input\.type = visible \? "text" : "password"/);
   assert.match(visibility, /aria-pressed/);
 });

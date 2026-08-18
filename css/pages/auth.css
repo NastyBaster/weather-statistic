@@ -178,6 +178,16 @@
   outline-offset: 1px;
 }
 
+.password-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .form-message {
   min-height: 22px;
   margin: 14px 0 0;
