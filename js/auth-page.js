@@ -5,12 +5,16 @@ import {
   signIn,
   signUp,
 } from "./auth.js";
+import { authErrorMessage } from "./auth-error.js";
+import { initializeEnvironmentBadge } from "./environment-badge.js";
 
 const form = document.querySelector("[data-auth-form]");
 const message = document.querySelector("[data-form-message]");
 const submitButton = document.querySelector("[data-submit]");
 const passwordInput = form.elements.password;
 let mode = "signin";
+
+initializeEnvironmentBadge();
 
 function showMessage(text, state = "") {
   message.textContent = text;
@@ -67,7 +71,7 @@ form.addEventListener("submit", async (event) => {
     form.reset();
     showMessage("Перевірте пошту та підтвердьте реєстрацію.", "success");
   } catch (error) {
-    showMessage(error.message || "Не вдалося виконати запит. Спробуйте ще раз.", "error");
+    showMessage(authErrorMessage(error), "error");
   } finally {
     setLoading(false, mode === "signin" ? "Увійти" : "Зареєструватися");
   }
@@ -85,7 +89,7 @@ document.querySelector("[data-forgot-password]").addEventListener("click", async
     await requestPasswordReset(email);
     showMessage("Якщо акаунт існує, ми надіслали посилання для зміни пароля.", "success");
   } catch (error) {
-    showMessage(error.message || "Не вдалося надіслати лист.", "error");
+    showMessage(authErrorMessage(error, "Не вдалося надіслати лист. Спробуйте пізніше."), "error");
   } finally {
     setLoading(false, "Увійти");
   }
@@ -94,5 +98,5 @@ document.querySelector("[data-forgot-password]").addEventListener("click", async
 try {
   if (await getCurrentSession()) globalThis.location.replace(dashboardUrl());
 } catch (error) {
-  showMessage(error.message || "Не вдалося підключитися до авторизації.", "error");
+  showMessage(authErrorMessage(error, "Не вдалося підключитися до авторизації."), "error");
 }

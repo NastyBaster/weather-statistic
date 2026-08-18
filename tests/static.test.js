@@ -20,6 +20,7 @@ test("authentication pages load configuration before their modules", async () =>
   ]) {
     const html = await readFile(new URL(page, root), "utf8");
     assert.ok(html.indexOf('src="runtime-config.js"') < html.indexOf(`src="${module}"`));
+    assert.match(html, /data-environment-badge/);
     await readFile(new URL(module, root), "utf8");
   }
 });
@@ -32,11 +33,20 @@ test("dashboard is protected and authentication supports the complete email flow
   assert.match(html, /data-sign-out/);
   assert.match(auth, /auth\.getSession\(\)/);
   assert.match(auth, /auth\.signUp/);
+  assert.match(auth, /emailRedirectTo: dashboardUrl\(\)/);
   assert.match(auth, /auth\.signInWithPassword/);
   assert.match(auth, /auth\.signOut/);
   assert.match(auth, /auth\.resetPasswordForEmail/);
   assert.match(auth, /auth\.updateUser/);
   assert.match(guard, /SIGNED_OUT/);
+});
+
+test("authentication errors are localized for common Supabase failures", async () => {
+  const errors = await readFile(new URL("js/auth-error.js", root), "utf8");
+  assert.match(errors, /invalid login credentials/i);
+  assert.match(errors, /email rate limit exceeded/i);
+  assert.match(errors, /load failed/i);
+  assert.match(errors, /Неправильний email або пароль/);
 });
 
 test("runtime configuration loads before the application module", async () => {

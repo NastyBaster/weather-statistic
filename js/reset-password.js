@@ -1,8 +1,12 @@
 import { dashboardUrl, getCurrentSession, updatePassword } from "./auth.js";
+import { authErrorMessage } from "./auth-error.js";
+import { initializeEnvironmentBadge } from "./environment-badge.js";
 
 const form = document.querySelector("[data-reset-form]");
 const message = document.querySelector("[data-form-message]");
 const submitButton = document.querySelector("[data-submit]");
+
+initializeEnvironmentBadge();
 
 function showMessage(text, state = "") {
   message.textContent = text;
@@ -15,7 +19,7 @@ try {
     submitButton.disabled = true;
   }
 } catch (error) {
-  showMessage(error.message || "Не вдалося перевірити посилання.", "error");
+  showMessage(authErrorMessage(error, "Не вдалося перевірити посилання."), "error");
   submitButton.disabled = true;
 }
 
@@ -35,7 +39,7 @@ form.addEventListener("submit", async (event) => {
     showMessage("Пароль оновлено. Переходимо до dashboard…", "success");
     globalThis.setTimeout(() => globalThis.location.replace(dashboardUrl()), 900);
   } catch (error) {
-    showMessage(error.message || "Не вдалося оновити пароль.", "error");
+    showMessage(authErrorMessage(error, "Не вдалося оновити пароль."), "error");
     submitButton.disabled = false;
     submitButton.textContent = "Зберегти пароль";
   }

@@ -17,7 +17,11 @@ export async function getCurrentSession() {
 
 export async function signUp(email, password) {
   const supabase = await getSupabaseClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: dashboardUrl() },
+  });
   if (error) throw error;
   return data;
 }

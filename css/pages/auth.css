@@ -22,6 +22,8 @@
 
 .auth-shell {
   width: min(100% - 32px, 470px);
+  max-width: calc(100vw - 24px);
+  min-width: 0;
   min-height: 100vh;
   display: grid;
   align-content: center;
@@ -35,7 +37,36 @@
   margin-inline: auto;
 }
 
+.environment-badge {
+  width: max-content;
+  max-width: 100%;
+  margin: -18px auto 0;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgb(255 253 247 / 80%);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.environment-badge[data-environment="development"] {
+  border-color: rgb(255 132 92 / 38%);
+  color: #8a321b;
+  background: #fff0eb;
+}
+
+.environment-badge[data-environment="production"] {
+  border-color: rgb(30 104 73 / 30%);
+  color: var(--green);
+  background: #eef7f1;
+}
+
 .auth-card {
+  width: 100%;
+  min-width: 0;
   padding: clamp(28px, 7vw, 48px);
   border: 1px solid rgb(216 219 209 / 80%);
   border-radius: 26px;
@@ -44,6 +75,8 @@
 }
 
 .auth-card h1 {
+  max-width: 100%;
+  overflow-wrap: break-word;
   font-size: clamp(2.6rem, 10vw, 4rem);
   letter-spacing: -0.05em;
 }
@@ -56,7 +89,7 @@
 
 .auth-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 24px;
   padding: 4px;
   border-radius: 12px;
@@ -64,6 +97,7 @@
 }
 
 .auth-tab {
+  min-width: 0;
   padding: 9px;
   border: 0;
   border-radius: 9px;
@@ -87,6 +121,7 @@
 }
 
 .auth-form {
+  min-width: 0;
   gap: 18px;
 }
 
@@ -97,6 +132,7 @@
 }
 
 .auth-form input {
+  min-width: 0;
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
@@ -129,4 +165,34 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+}
+
+@media (max-width: 420px) {
+  .auth-shell {
+    width: calc(100% - 20px);
+    max-width: calc(100vw - 20px);
+    gap: 20px;
+    padding-block: 24px;
+  }
+
+  .auth-card {
+    padding: 26px 20px;
+    border-radius: 20px;
+  }
+
+  .auth-card h1 {
+    font-size: clamp(2.4rem, 15vw, 3.5rem);
+    line-height: 0.98;
+  }
+
+  .auth-tab {
+    padding-inline: 5px;
+    font-size: 0.9rem;
+  }
+
+  .auth-form input,
+  .auth-form .button {
+    width: 100%;
+    max-width: 100%;
+  }
 }

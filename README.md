@@ -19,6 +19,7 @@ npm run dev
 - `login.html` підтримує реєстрацію та вхід через email/password, а також надсилання листа для відновлення пароля.
 - `reset-password.html` приймає recovery session із Supabase та дозволяє встановити новий пароль.
 - `index.html` є захищеним dashboard: сесія відновлюється перед показом вмісту, а неавторизованого користувача буде перенаправлено на сторінку входу.
+- Сторінки авторизації показують помітку `development`, `production` або `local`, щоб тестовий preview не плутали з основним сайтом.
 - Для локальної перевірки згенеруйте `runtime-config.js` через `SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... npm run build`, а потім обслуговуйте каталог `dist` статичним сервером.
 
 У Supabase Authentication → URL Configuration додайте локальний URL `http://localhost:4173/reset-password.html`, URL PR preview та production URL до Redirect URLs. Не використовуйте wildcard production-домену ширший, ніж потрібно.
