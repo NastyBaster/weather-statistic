@@ -14,8 +14,13 @@ body {
 }
 
 button,
-select {
+select,
+input {
   font: inherit;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 a {

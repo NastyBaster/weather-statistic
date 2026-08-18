@@ -13,6 +13,54 @@ test("entry page references existing local assets", async () => {
   await Promise.all(references.map((path) => readFile(new URL(path, root), "utf8")));
 });
 
+test("authentication pages load configuration before their modules", async () => {
+  for (const [page, module] of [
+    ["login.html", "js/auth-page.js"],
+    ["reset-password.html", "js/reset-password.js"],
+  ]) {
+    const html = await readFile(new URL(page, root), "utf8");
+    assert.ok(html.indexOf('src="runtime-config.js"') < html.indexOf(`src="${module}"`));
+    assert.match(html, /data-environment-badge/);
+    await readFile(new URL(module, root), "utf8");
+  }
+});
+
+test("dashboard stays public while authentication supports the complete email flow", async () => {
+  const html = await readFile(new URL("index.html", root), "utf8");
+  const auth = await readFile(new URL("js/auth.js", root), "utf8");
+  const dashboardAuth = await readFile(new URL("js/dashboard-auth.js", root), "utf8");
+  assert.doesNotMatch(html, /data-protected-page/);
+  assert.match(html, /data-sign-in/);
+  assert.match(html, /data-sign-out/);
+  assert.match(auth, /auth\.getSession\(\)/);
+  assert.match(auth, /auth\.signUp/);
+  assert.match(auth, /emailRedirectTo: dashboardUrl\(\)/);
+  assert.match(auth, /auth\.signInWithPassword/);
+  assert.match(auth, /auth\.signOut/);
+  assert.match(auth, /auth\.resetPasswordForEmail/);
+  assert.match(auth, /auth\.updateUser/);
+  assert.match(dashboardAuth, /renderSession/);
+});
+
+test("password inputs support browser autofill and a visibility control", async () => {
+  const login = await readFile(new URL("login.html", root), "utf8");
+  const visibility = await readFile(new URL("js/password-visibility.js", root), "utf8");
+  assert.match(login, /autocomplete="username"/);
+  assert.match(login, /data-password-toggle/);
+  assert.match(login, /password-icon--show/);
+  assert.match(login, /password-icon--hide/);
+  assert.match(visibility, /input\.type = visible \? "text" : "password"/);
+  assert.match(visibility, /aria-pressed/);
+});
+
+test("authentication errors are localized for common Supabase failures", async () => {
+  const errors = await readFile(new URL("js/auth-error.js", root), "utf8");
+  assert.match(errors, /invalid login credentials/i);
+  assert.match(errors, /email rate limit exceeded/i);
+  assert.match(errors, /load failed/i);
+  assert.match(errors, /Неправильний email або пароль/);
+});
+
 test("runtime configuration loads before the application module", async () => {
   const html = await readFile(new URL("index.html", root), "utf8");
   assert.ok(html.indexOf('src="runtime-config.js"') < html.indexOf('src="js/app.js"'));
@@ -30,6 +78,17 @@ test("initial Supabase migration enables RLS and provides a health check", async
   assert.match(migration, /create function public\.health_check/);
 });
 
+test("a separate migration creates profiles for new authentication users", async () => {
+  const migration = await readFile(
+    new URL("supabase/migrations/202608170002_create_profile_on_signup.sql", root),
+    "utf8",
+  );
+  assert.match(migration, /security definer set search_path = ''/);
+  assert.match(migration, /insert into public\.profiles/);
+  assert.match(migration, /after insert on auth\.users/);
+  assert.match(migration, /on conflict \(id\) do nothing/);
+});
+
 test("stylesheet entry point references existing CSS modules", async () => {
   const stylesheet = await readFile(new URL("css/styles.css", root), "utf8");
   const imports = [...stylesheet.matchAll(/@import url\("([^"]+)"\)/g)].map((match) => match[1]);
@@ -40,9 +99,15 @@ test("stylesheet entry point references existing CSS modules", async () => {
     "layout.css",
     "components.css",
     "pages/dashboard.css",
+    "pages/auth.css",
     "responsive.css",
   ]);
   await Promise.all(imports.map((path) => readFile(new URL(`css/${path}`, root), "utf8")));
+});
+
+test("build includes every application page", async () => {
+  const build = await readFile(new URL("scripts/build.mjs", root), "utf8");
+  assert.match(build, /"index\.html", "login\.html", "reset-password\.html"/);
 });
 
 test("entry page has Ukrainian language and one main landmark", async () => {
