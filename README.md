@@ -45,6 +45,7 @@ npm run check
 
 - `.github/workflows/ci.yml` перевіряє кожен Pull Request і зміни основних гілок.
 - `.github/workflows/deploy.yml` створює Cloudflare Pages preview для Pull Request і production deployment після push у `main`.
+- Для перевірки auth UX відкрийте URL з кроку `Deploy to Cloudflare Pages` у PR: workflow публікує окремий preview для гілки та додає адресу до summary запуску.
 - Для deployment у GitHub необхідно створити environments `development` і `production`, а також додати secrets `CLOUDFLARE_API_TOKEN` та `CLOUDFLARE_ACCOUNT_ID`.
 - У Cloudflare Pages має існувати проєкт `forecast-reality-check`; production branch — `main`.
 - GitHub environments `development` і `production` мають містити variables `SUPABASE_URL` та `SUPABASE_PUBLISHABLE_KEY` відповідних Supabase-проєктів.

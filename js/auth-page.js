@@ -5,7 +5,8 @@ import {
   signIn,
   signUp,
 } from "./auth.js";
-import { authErrorMessage } from "./auth-error.js";
+import { authErrorMessage, isNetworkError } from "./auth-error.js";
+import { fieldError, showBanner, validateCredentials, validateEmail } from "./auth-ui.js";
 import { initializeEnvironmentBadge } from "./environment-badge.js";
 import { initializePasswordVisibility } from "./password-visibility.js";
 
@@ -19,8 +20,7 @@ initializeEnvironmentBadge();
 initializePasswordVisibility();
 
 function showMessage(text, state = "") {
-  message.textContent = text;
-  message.dataset.state = state;
+  showBanner(message, text, state, state === "error");
 }
 
 function setLoading(loading, label) {
@@ -43,6 +43,7 @@ function setMode(nextMode) {
     tab.setAttribute("aria-selected", String(active));
   });
   showMessage("");
+  form.querySelectorAll("input").forEach((input) => fieldError(input, ""));
   setLoading(false, signingIn ? "Увійти" : "Зареєструватися");
 }
 
@@ -52,7 +53,7 @@ document.querySelectorAll("[data-mode]").forEach((tab) => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!form.reportValidity()) return;
+  if (!validateCredentials(form)) return;
   const email = form.elements.email.value.trim();
   const password = passwordInput.value;
   setLoading(true);
@@ -71,9 +72,9 @@ form.addEventListener("submit", async (event) => {
       return;
     }
     form.reset();
-    showMessage("Перевірте пошту та підтвердьте реєстрацію.", "success");
+    showMessage(`Лист для підтвердження надіслано на ${email}. Перевірте Inbox і Spam.`, "success");
   } catch (error) {
-    showMessage(authErrorMessage(error), "error");
+    showBanner(message, authErrorMessage(error), "error", isNetworkError(error));
   } finally {
     setLoading(false, mode === "signin" ? "Увійти" : "Зареєструватися");
   }
@@ -81,20 +82,32 @@ form.addEventListener("submit", async (event) => {
 
 document.querySelector("[data-forgot-password]").addEventListener("click", async () => {
   const email = form.elements.email.value.trim();
-  if (!email || !form.elements.email.checkValidity()) {
-    showMessage("Введіть коректний email для відновлення пароля.", "error");
-    form.elements.email.focus();
+  const emailError = validateEmail(email);
+  if (!fieldError(form.elements.email, emailError)) {
+    form.elements.email.focus({ preventScroll: true });
+    form.elements.email.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   setLoading(true);
   try {
     await requestPasswordReset(email);
-    showMessage("Якщо акаунт існує, ми надіслали посилання для зміни пароля.", "success");
+    showMessage(`Якщо акаунт ${email} існує, лист уже в дорозі. Перевірте Inbox і Spam.`, "success");
   } catch (error) {
     showMessage(authErrorMessage(error, "Не вдалося надіслати лист. Спробуйте пізніше."), "error");
   } finally {
     setLoading(false, "Увійти");
   }
+});
+
+form.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => {
+  if (input.getAttribute("aria-invalid") === "true") {
+    fieldError(input, input.name === "email" ? validateEmail(input.value) : "");
+  }
+}));
+
+message.querySelector("[data-retry]").addEventListener("click", () => {
+  showMessage("");
+  submitButton.focus();
 });
 
 try {
