@@ -14,6 +14,9 @@ const form = document.querySelector("[data-auth-form]");
 const message = document.querySelector("[data-form-message]");
 const submitButton = document.querySelector("[data-submit]");
 const passwordInput = form.elements.password;
+const tabs = document.querySelector(".auth-tabs");
+const forgotPasswordButton = document.querySelector("[data-forgot-password]");
+const confirmation = document.querySelector("[data-signup-confirmation]");
 let mode = "signin";
 
 initializeEnvironmentBadge();
@@ -47,6 +50,29 @@ function setMode(nextMode) {
   setLoading(false, signingIn ? "Увійти" : "Зареєструватися");
 }
 
+function showSignupConfirmation(email) {
+  form.hidden = true;
+  tabs.hidden = true;
+  forgotPasswordButton.hidden = true;
+  showMessage("");
+  document.querySelector("[data-auth-intro]").hidden = true;
+  confirmation.querySelector("[data-signup-email]").textContent = email;
+  confirmation.hidden = false;
+  confirmation.focus({ preventScroll: true });
+  confirmation.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function editSignupEmail() {
+  confirmation.hidden = true;
+  form.hidden = false;
+  tabs.hidden = false;
+  document.querySelector("[data-auth-intro]").hidden = false;
+  form.elements.email.value = confirmation.querySelector("[data-signup-email]").textContent;
+  form.elements.password.value = "";
+  setMode("signup");
+  form.elements.email.focus();
+}
+
 document.querySelectorAll("[data-mode]").forEach((tab) => {
   tab.addEventListener("click", () => setMode(tab.dataset.mode));
 });
@@ -72,7 +98,7 @@ form.addEventListener("submit", async (event) => {
       return;
     }
     form.reset();
-    showMessage(`Лист для підтвердження надіслано на ${email}. Перевірте Inbox і Spam.`, "success");
+    showSignupConfirmation(email);
   } catch (error) {
     showBanner(message, authErrorMessage(error), "error", isNetworkError(error));
   } finally {
@@ -80,7 +106,7 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-document.querySelector("[data-forgot-password]").addEventListener("click", async () => {
+forgotPasswordButton.addEventListener("click", async () => {
   const email = form.elements.email.value.trim();
   const emailError = validateEmail(email);
   if (!fieldError(form.elements.email, emailError)) {
@@ -98,6 +124,8 @@ document.querySelector("[data-forgot-password]").addEventListener("click", async
     setLoading(false, "Увійти");
   }
 });
+
+document.querySelector("[data-change-signup-email]").addEventListener("click", editSignupEmail);
 
 form.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => {
   if (input.getAttribute("aria-invalid") === "true") {

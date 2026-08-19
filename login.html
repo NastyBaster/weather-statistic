@@ -50,6 +50,15 @@
         </form>
         <div class="form-message" data-form-message role="status" aria-live="polite" hidden><span class="message-icon" aria-hidden="true"></span><span data-message-text></span><button class="message-retry" data-retry type="button" hidden>Спробувати ще раз</button></div>
         <button class="text-link" type="button" data-forgot-password>Забули пароль?</button>
+
+        <section class="signup-confirmation" data-signup-confirmation aria-labelledby="signup-confirmation-title" tabindex="-1" hidden>
+          <span class="signup-confirmation__icon" aria-hidden="true">✓</span>
+          <h2 id="signup-confirmation-title">Перевірте вашу пошту</h2>
+          <p>Ми надіслали лист для підтвердження на адресу:</p>
+          <output class="signup-confirmation__email" data-signup-email></output>
+          <p class="signup-confirmation__hint"><strong>Не бачите листа?</strong> Перевірте папки <strong>Inbox</strong> і <strong>Spam</strong>. Доставка може зайняти кілька хвилин.</p>
+          <button class="text-link" type="button" data-change-signup-email>Вказати іншу email-адресу</button>
+        </section>
       </section>
     </main>
   </body>
