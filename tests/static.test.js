@@ -40,6 +40,7 @@ test("dashboard stays public while authentication supports the complete email fl
   assert.match(auth, /auth\.resetPasswordForEmail/);
   assert.match(auth, /auth\.updateUser/);
   assert.match(dashboardAuth, /renderSession/);
+  assert.match(dashboardAuth, /location\.replace\(loginUrl\(\)\)/);
 });
 
 test("login supports Google OAuth with an explicit dashboard redirect", async () => {
