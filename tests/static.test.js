@@ -42,6 +42,18 @@ test("dashboard stays public while authentication supports the complete email fl
   assert.match(dashboardAuth, /renderSession/);
 });
 
+test("login supports Google OAuth with an explicit dashboard redirect", async () => {
+  const login = await readFile(new URL("login.html", root), "utf8");
+  const auth = await readFile(new URL("js/auth.js", root), "utf8");
+  const authPage = await readFile(new URL("js/auth-page.js", root), "utf8");
+  assert.match(login, /data-google-sign-in/);
+  assert.match(login, /Продовжити з Google/);
+  assert.match(auth, /auth\.signInWithOAuth/);
+  assert.match(auth, /provider: "google"/);
+  assert.match(auth, /redirectTo: dashboardUrl\(\)/);
+  assert.match(authPage, /signInWithGoogle/);
+});
+
 test("password inputs support browser autofill and a visibility control", async () => {
   const login = await readFile(new URL("login.html", root), "utf8");
   const visibility = await readFile(new URL("js/password-visibility.js", root), "utf8");
