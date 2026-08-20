@@ -114,6 +114,64 @@
   box-shadow: 0 3px 12px rgb(34 48 40 / 8%);
 }
 
+.google-auth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.google-auth-button:hover:not(:disabled) {
+  border-color: var(--green);
+  background: #f8fbf9;
+  box-shadow: 0 4px 14px rgb(34 48 40 / 8%);
+}
+
+.google-auth-button:focus-visible {
+  outline: 3px solid rgb(30 104 73 / 25%);
+  outline-offset: 2px;
+}
+
+.google-auth-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.google-auth-button__icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 .auth-form,
 .auth-form label {
   display: grid;

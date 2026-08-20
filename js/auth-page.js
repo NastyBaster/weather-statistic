@@ -3,6 +3,7 @@ import {
   getCurrentSession,
   requestPasswordReset,
   signIn,
+  signInWithGoogle,
   signUp,
 } from "./auth.js";
 import { authErrorMessage, isNetworkError } from "./auth-error.js";
@@ -13,6 +14,7 @@ import { initializePasswordVisibility } from "./password-visibility.js";
 const form = document.querySelector("[data-auth-form]");
 const message = document.querySelector("[data-form-message]");
 const submitButton = document.querySelector("[data-submit]");
+const googleButton = document.querySelector("[data-google-sign-in]");
 const passwordInput = form.elements.password;
 const tabs = document.querySelector(".auth-tabs");
 const forgotPasswordButton = document.querySelector("[data-forgot-password]");
@@ -29,6 +31,13 @@ function showMessage(text, state = "") {
 function setLoading(loading, label) {
   submitButton.disabled = loading;
   submitButton.textContent = loading ? "Зачекайте…" : label;
+}
+
+function setGoogleLoading(loading) {
+  googleButton.disabled = loading;
+  googleButton.querySelector("[data-google-label]").textContent = loading
+    ? "Переходимо до Google…"
+    : "Продовжити з Google";
 }
 
 function setMode(nextMode) {
@@ -75,6 +84,18 @@ function editSignupEmail() {
 
 document.querySelectorAll("[data-mode]").forEach((tab) => {
   tab.addEventListener("click", () => setMode(tab.dataset.mode));
+});
+
+googleButton.addEventListener("click", async () => {
+  setGoogleLoading(true);
+  showMessage("");
+
+  try {
+    await signInWithGoogle();
+  } catch (error) {
+    setGoogleLoading(false);
+    showMessage(authErrorMessage(error, "Не вдалося розпочати вхід через Google."), "error");
+  }
 });
 
 form.addEventListener("submit", async (event) => {

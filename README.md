@@ -16,13 +16,17 @@ npm run dev
 
 ## Авторизація
 
-- `login.html` підтримує реєстрацію та вхід через email/password, а також надсилання листа для відновлення пароля.
+- `login.html` підтримує Google OAuth, реєстрацію та вхід через email/password, а також надсилання листа для відновлення пароля.
 - `reset-password.html` приймає recovery session із Supabase та дозволяє встановити новий пароль.
 - `index.html` залишається публічним із демонстраційними даними; авторизований користувач бачить email і кнопку виходу, а гість — кнопку входу.
 - Сторінки авторизації показують помітку `development`, `production` або `local`, щоб тестовий preview не плутали з основним сайтом.
 - Для локальної перевірки згенеруйте `runtime-config.js` через `SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... npm run build`, а потім обслуговуйте каталог `dist` статичним сервером.
 
 У Supabase Authentication → URL Configuration додайте локальний URL `http://localhost:4173/reset-password.html`, URL PR preview та production URL до Redirect URLs. Не використовуйте wildcard production-домену ширший, ніж потрібно.
+
+Для Google OAuth створіть окремі Web application clients для development і production. У Google Authorized redirect URIs додайте callback відповідного Supabase-проєкту у форматі `https://<project-ref>.supabase.co/auth/v1/callback`, а Client ID і Client Secret зберігайте лише в налаштуваннях Google provider у Supabase. До Supabase Redirect URLs додайте `http://localhost:4173/index.html`, точні адреси PR preview та production. Google Client Secret не належить до browser-конфігурації або GitHub variables застосунку.
+
+Для development-проєкту можна дозволити лише preview-піддомени цього Cloudflare Pages проєкту шаблоном `https://*.forecast-reality-check.pages.dev/**`; окремо додайте `https://forecast-reality-check.pages.dev/**`, якщо OAuth перевіряється на кореневому домені. Не використовуйте ширший шаблон для всіх `pages.dev`. `Site URL` не повинен посилатися на тимчасовий або закритий PR: якщо переданий застосунком `redirectTo` відсутній у Redirect URLs, Supabase використає `Site URL` як fallback і користувач опиниться на іншому deployment. Після зміни URL Configuration повторний build не потрібен.
 
 ## Структура стилів
 

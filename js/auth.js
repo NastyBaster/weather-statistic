@@ -33,6 +33,16 @@ export async function signIn(email, password) {
   return data;
 }
 
+export async function signInWithGoogle() {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: dashboardUrl() },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   const supabase = await getSupabaseClient();
   const { error } = await supabase.auth.signOut();

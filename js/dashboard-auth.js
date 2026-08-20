@@ -1,4 +1,4 @@
-import { getCurrentSession, onAuthStateChange, signOut } from "./auth.js";
+import { getCurrentSession, loginUrl, onAuthStateChange, signOut } from "./auth.js";
 
 function renderSession(session) {
   const email = document.querySelector("[data-user-email]");
@@ -29,10 +29,10 @@ export async function initializeDashboardAuth() {
     signOutButton.textContent = "Виходимо…";
     try {
       await signOut();
-      renderSession(null);
+      globalThis.location.replace(loginUrl());
+      return;
     } catch (error) {
       console.error("Sign out failed", error);
-    } finally {
       signOutButton.disabled = false;
       signOutButton.textContent = "Вийти";
     }
