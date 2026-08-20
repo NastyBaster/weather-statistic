@@ -27,11 +27,11 @@
         </div>
 
         <form class="auth-form" data-auth-form novalidate>
-          <label>Email<input type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required /></label>
-          <label>
+          <label data-field>Email<input id="auth-email" type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required aria-invalid="false" aria-describedby="auth-email-error" /><span class="field-error" id="auth-email-error"></span></label>
+          <label data-field>
             <span>Пароль</span>
             <span class="password-field">
-              <input type="password" name="password" autocomplete="current-password" minlength="8" required />
+              <input id="auth-password" type="password" name="password" autocomplete="current-password" minlength="8" required aria-invalid="false" aria-describedby="auth-password-error" />
               <button class="password-toggle" data-password-toggle type="button" aria-label="Показати пароль" aria-pressed="false">
                 <svg class="password-icon password-icon--show" aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
@@ -44,11 +44,21 @@
                 </svg>
               </button>
             </span>
+            <span class="field-error" id="auth-password-error"></span>
           </label>
           <button class="button" data-submit type="submit">Увійти</button>
         </form>
-        <p class="form-message" data-form-message role="status" aria-live="polite"></p>
+        <div class="form-message" data-form-message role="status" aria-live="polite" hidden><span class="message-icon" aria-hidden="true"></span><span data-message-text></span><button class="message-retry" data-retry type="button" hidden>Спробувати ще раз</button></div>
         <button class="text-link" type="button" data-forgot-password>Забули пароль?</button>
+
+        <section class="signup-confirmation" data-signup-confirmation aria-labelledby="signup-confirmation-title" tabindex="-1" hidden>
+          <span class="signup-confirmation__icon" aria-hidden="true">✓</span>
+          <h2 id="signup-confirmation-title">Перевірте вашу пошту</h2>
+          <p>Ми надіслали лист для підтвердження на адресу:</p>
+          <output class="signup-confirmation__email" data-signup-email></output>
+          <p class="signup-confirmation__hint"><strong>Не бачите листа?</strong> Перевірте папки <strong>Inbox</strong> і <strong>Spam</strong>. Доставка може зайняти кілька хвилин.</p>
+          <button class="text-link" type="button" data-change-signup-email>Вказати іншу email-адресу</button>
+        </section>
       </section>
     </main>
   </body>

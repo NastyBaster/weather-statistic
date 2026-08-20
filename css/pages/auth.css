@@ -142,6 +142,20 @@
   background: white;
 }
 
+.auth-form input[aria-invalid="true"] {
+  border-color: #b84226;
+  background: #fff7f4;
+  box-shadow: 0 0 0 3px rgb(184 66 38 / 13%);
+}
+
+.field-error {
+  min-height: 1.1em;
+  color: #9a351e;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .password-field {
   position: relative;
   display: block;
@@ -189,15 +203,57 @@
 }
 
 .form-message {
-  min-height: 22px;
   margin: 14px 0 0;
-  color: var(--muted);
+  padding: 13px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
   font-size: 0.82rem;
   line-height: 1.45;
 }
 
-.form-message[data-state="error"] { color: #9a351e; }
-.form-message[data-state="success"] { color: var(--green); }
+.form-message[hidden] { display: none; }
+.form-message[data-state="error"] { border-color: #e5a797; color: #7f2c18; background: #fff0eb; }
+.form-message[data-state="success"] { border-color: #9cc9ae; color: #175d3f; background: #eef8f1; }
+.message-icon::before { content: "ℹ"; font-weight: 900; }
+.form-message[data-state="error"] .message-icon::before { content: "⚠"; }
+.form-message[data-state="success"] .message-icon::before { content: "✓"; }
+.message-retry { grid-column: 2; width: max-content; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+
+.signup-confirmation {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px 20px;
+  border: 1px solid #9cc9ae;
+  border-radius: 18px;
+  color: #175d3f;
+  background: #eef8f1;
+  text-align: center;
+}
+
+.signup-confirmation[hidden] { display: none; }
+
+.signup-confirmation__icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--green);
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.signup-confirmation h2 { font-size: 1.55rem; line-height: 1.15; }
+.signup-confirmation p { margin: 0; line-height: 1.5; }
+.signup-confirmation__email { max-width: 100%; padding: 9px 12px; border-radius: 9px; color: var(--ink); background: white; font-weight: 850; overflow-wrap: anywhere; }
+.signup-confirmation__hint { padding-top: 4px; color: var(--ink); font-size: 0.88rem; }
 
 .text-link {
   margin-top: 8px;
@@ -214,11 +270,13 @@
 }
 
 @media (max-width: 420px) {
+  .auth-page { scroll-padding-bottom: max(24px, env(safe-area-inset-bottom)); }
   .auth-shell {
     width: calc(100% - 20px);
     max-width: calc(100vw - 20px);
     gap: 20px;
-    padding-block: 24px;
+    align-content: start;
+    padding-block: 24px max(32px, env(safe-area-inset-bottom));
   }
 
   .auth-card {
