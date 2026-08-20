@@ -26,6 +26,8 @@ npm run dev
 
 Для Google OAuth створіть окремі Web application clients для development і production. У Google Authorized redirect URIs додайте callback відповідного Supabase-проєкту у форматі `https://<project-ref>.supabase.co/auth/v1/callback`, а Client ID і Client Secret зберігайте лише в налаштуваннях Google provider у Supabase. До Supabase Redirect URLs додайте `http://localhost:4173/index.html`, точні адреси PR preview та production. Google Client Secret не належить до browser-конфігурації або GitHub variables застосунку.
 
+Для development-проєкту можна дозволити лише preview-піддомени цього Cloudflare Pages проєкту шаблоном `https://*.forecast-reality-check.pages.dev/**`; окремо додайте `https://forecast-reality-check.pages.dev/**`, якщо OAuth перевіряється на кореневому домені. Не використовуйте ширший шаблон для всіх `pages.dev`. `Site URL` не повинен посилатися на тимчасовий або закритий PR: якщо переданий застосунком `redirectTo` відсутній у Redirect URLs, Supabase використає `Site URL` як fallback і користувач опиниться на іншому deployment. Після зміни URL Configuration повторний build не потрібен.
+
 ## Структура стилів
 
 `css/styles.css` є єдиною точкою підключення стилів і імпортує модулі в передбачуваному порядку:
