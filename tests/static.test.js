@@ -52,6 +52,7 @@ test("login supports Google OAuth with an explicit dashboard redirect", async ()
   assert.match(auth, /auth\.signInWithOAuth/);
   assert.match(auth, /provider: "google"/);
   assert.match(auth, /redirectTo: dashboardUrl\(\)/);
+  assert.match(auth, /prompt: "select_account"/);
   assert.match(authPage, /signInWithGoogle/);
 });
 
@@ -121,6 +122,12 @@ test("stylesheet entry point references existing CSS modules", async () => {
 test("build includes every application page", async () => {
   const build = await readFile(new URL("scripts/build.mjs", root), "utf8");
   assert.match(build, /"index\.html", "login\.html", "reset-password\.html"/);
+});
+
+test("production build copies the complete JavaScript module directory", async () => {
+  const build = await readFile(new URL("scripts/build.mjs", root), "utf8");
+  assert.match(build, /"css", "js"/);
+  await Promise.all(["js/locations.js", "js/city-catalog.js", "js/locations-ui.js"].map((path) => readFile(new URL(path, root), "utf8")));
 });
 
 test("entry page has Ukrainian language and one main landmark", async () => {

@@ -1,5 +1,6 @@
 import { initializeConnectionStatus } from "./connection-status.js";
 import { initializeDashboardAuth } from "./dashboard-auth.js";
+import { initializeLocationsUI } from "./locations-ui.js";
 
 const cityData = {
   kyiv: {
@@ -96,4 +97,5 @@ sortButton.addEventListener("click", () => {
 
 render();
 initializeConnectionStatus();
-initializeDashboardAuth();
+const locationsUI = initializeLocationsUI();
+initializeDashboardAuth({ onSessionChange: (session) => locationsUI.setSession(session) });

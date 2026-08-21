@@ -12,6 +12,16 @@
   .stats {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .location-item {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .location-actions .button {
+    min-height: 44px;
+    flex: 1 1 150px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -44,9 +54,26 @@
   }
 
   .dashboard,
+  .locations,
   .history {
     padding: 22px 16px;
     border-radius: 18px;
+  }
+
+  .locations .section-heading .button {
+    width: 100%;
+  }
+
+  .confirm-dialog__content {
+    padding: 22px;
+  }
+
+  .confirm-dialog__actions {
+    flex-direction: column;
+  }
+
+  .confirm-dialog__actions .button {
+    width: 100%;
   }
 
   .section-heading {
