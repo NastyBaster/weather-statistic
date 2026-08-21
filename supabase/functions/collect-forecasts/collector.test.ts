@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { authorize, parseAllowlist } from "./auth.ts";
 import { groupLocations, mapConcurrent, terminalStatus } from "./collector.ts";
 import { normalizeResponse } from "./normalize.ts";
@@ -135,8 +135,8 @@ for (
   Deno.test(`normalization rejects ${name}`, () => {
     const body = valid();
     mutate(body);
-    assertRejects(
-      () => Promise.resolve(normalizeResponse(body, "2026-08-21")),
+    assertThrows(
+      () => normalizeResponse(body, "2026-08-21"),
       ProviderError,
     );
   });
@@ -161,10 +161,7 @@ Deno.test(
       localDate(new Date("2026-03-08T07:30:00Z"), "America/New_York"),
       "2026-03-08",
     );
-    assertRejects(
-      () => Promise.resolve(localDate(new Date(), "Not/AZone")),
-      RangeError,
-    );
+    assertThrows(() => localDate(new Date(), "Not/AZone"), RangeError);
   },
 );
 
