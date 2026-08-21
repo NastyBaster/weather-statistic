@@ -11,6 +11,7 @@ Run this procedure **only for `weather-statistic-dev`**. Production deployment a
    The open Open-Meteo endpoint needs no provider key/secret. Supabase provides `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to the managed function; do not set their values in repository or frontend configuration.
 4. Deploy only development:
    `supabase functions deploy collect-forecasts --project-ref <weather-statistic-dev-ref>`.
+   The function-local `deno.json` is intentionally colocated with the entry point so the remote Supabase bundler receives the bare-import mapping for `@supabase/supabase-js`; keep it in the deployment upload.
 5. Obtain a short-lived access token by signing in to the development application as the operator and copying the session access token privately from the browser developer tools. Store it only in a temporary local shell variable (`read -s ACCESS_TOKEN; export ACCESS_TOKEN`) and unset it afterward. Never paste it into source, screenshots, PR text, or commands retained in shared history.
 6. Invoke:
    `curl --fail-with-body -X POST 'https://<weather-statistic-dev-ref>.supabase.co/functions/v1/collect-forecasts' -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' --data '{}'`.

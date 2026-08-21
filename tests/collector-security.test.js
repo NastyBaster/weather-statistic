@@ -23,3 +23,16 @@ test("no credential-shaped literal is committed", () => {
   assert.doesNotMatch(repositorySources, /SUPABASE_SERVICE_ROLE_KEY\s*=\s*['"][A-Za-z0-9._-]{20,}/);
   assert.doesNotMatch(repositorySources, /FORECAST_ADMIN_USER_IDS\s*=\s*[0-9a-f]{8}-[0-9a-f-]{27,}/i);
 });
+
+test("collector ships its dependency mapping with the function", () => {
+  const config = JSON.parse(
+    readFileSync(
+      "supabase/functions/collect-forecasts/deno.json",
+      "utf8",
+    ),
+  );
+  assert.equal(
+    config.imports["@supabase/supabase-js"],
+    "npm:@supabase/supabase-js@2",
+  );
+});
