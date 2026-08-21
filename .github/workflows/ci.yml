@@ -17,3 +17,10 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno fmt --check supabase/functions
+      - run: deno lint supabase/functions
+      - run: deno check supabase/functions/collect-forecasts/index.ts supabase/functions/collect-forecasts/collector.test.ts
+      - run: deno test --allow-env supabase/functions/collect-forecasts
