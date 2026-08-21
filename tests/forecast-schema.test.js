@@ -6,6 +6,9 @@ import test from "node:test";
 const migrationName = "202608210001_create_forecast_contract.sql";
 const migrationPath = new URL(`../supabase/migrations/${migrationName}`, import.meta.url);
 const sql = await readFile(migrationPath, "utf8");
+const reviewedHash = (contents) => createHash("sha256")
+  .update(contents.replace(/\r\n?/g, "\n"), "utf8")
+  .digest("hex");
 
 test("forecast schema is introduced by one new migration", async () => {
   const migrations = await readdir(new URL("../supabase/migrations/", import.meta.url));
@@ -23,8 +26,11 @@ test("previously applied migrations retain their reviewed contents", async () =>
   ]);
 
   for (const [name, expectedHash] of expectedHashes) {
-    const contents = await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url));
-    assert.equal(createHash("sha256").update(contents).digest("hex"), expectedHash);
+    const contents = await readFile(
+      new URL(`../supabase/migrations/${name}`, import.meta.url),
+      "utf8",
+    );
+    assert.equal(reviewedHash(contents), expectedHash);
   }
 });
 

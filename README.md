@@ -86,3 +86,14 @@ npm run check
 - Точний план застосування лише до development і двокористувацької runtime-перевірки RLS/immutability/cascade: [`docs/validation/forecast-schema-development.md`](docs/validation/forecast-schema-development.md).
 
 Production migration дозволена лише після успішної development validation та review. Edge Function, adapter, manual trigger, scheduler, observations, accuracy calculations і real-data dashboard відкладені до наступних етапів.
+
+## Forecast Reality Check 5.1 — ручний collector
+
+`supabase/functions/collect-forecasts` реалізує privileged POST-only Edge Function. Вона перевіряє Supabase user JWT та UUID allowlist із development secret `FORECAST_ADMIN_USER_IDS`, читає лише active locations, точно групує однакові coordinates/timezone, викликає Open-Meteo server-side з canonical units і розгортає один response на конкретні location IDs. Service-role credential надається керованим Edge runtime і не належить repository, Cloudflare або frontend.
+
+Collector строго нормалізує response, фіксує `collected_at` після успішного отримання/валідації, обчислює `collection_date` через IANA timezone та не передає generated `lead_days`. До чотирьох груп виконуються паралельно; timeout, bounded retry, jitter, 429/5xx handling і partial failure не створюють додаткових runs. Immutable insert з `ON CONFLICT DO NOTHING` зберігає перший snapshot і точно рахує лише створені rows. Scheduler, production function deployment, UI trigger, observations та accuracy залишаються відкладеними.
+
+- Архітектура і security/error semantics: [`docs/architecture/manual-forecast-collector.md`](docs/architecture/manual-forecast-collector.md).
+- Точні development-only deploy, invocation, idempotency та RLS validation кроки: [`docs/validation/manual-forecast-collector-development.md`](docs/validation/manual-forecast-collector-development.md).
+
+Edge перевірки локально: `deno fmt --check supabase/functions`, `deno lint supabase/functions`, `deno check supabase/functions/collect-forecasts/index.ts supabase/functions/collect-forecasts/collector.test.ts` і `deno test --allow-env supabase/functions/collect-forecasts`. Тести використовують mocked fetch і не звертаються до Open-Meteo.
