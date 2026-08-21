@@ -36,3 +36,10 @@ test("collector ships its dependency mapping with the function", () => {
     "npm:@supabase/supabase-js@2",
   );
 });
+
+test("repository checks do not rely on shell glob expansion", () => {
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+  assert.doesNotMatch(packageJson.scripts.check, /js\/\*\.js/);
+  assert.doesNotMatch(packageJson.scripts.test, /tests\/\*\.test\.js/);
+  assert.match(packageJson.scripts.test, /scripts\/test-node\.mjs/);
+});
