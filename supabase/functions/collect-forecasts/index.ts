@@ -38,4 +38,4 @@ export async function handler(request: Request, env = Deno.env) {
     return json({ error: "collection_failed" }, 500);
   }
 }
-if (import.meta.main) Deno.serve(handler);
+if (import.meta.main) Deno.serve((request) => handler(request));
