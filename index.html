@@ -121,6 +121,19 @@
           <div class="locations-state" data-locations-state role="status" aria-live="polite"></div>
           <ul class="locations-list" data-locations-list aria-label="Збережені міста"></ul>
         </div>
+
+        <dialog class="confirm-dialog" data-delete-dialog aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-description">
+          <div class="confirm-dialog__content">
+            <p class="eyebrow">Підтвердження</p>
+            <h3 id="delete-dialog-title">Видалити місто?</h3>
+            <p id="delete-dialog-description" data-delete-dialog-message></p>
+            <p class="confirm-dialog__error" data-delete-dialog-error role="alert" tabindex="-1" hidden></p>
+            <div class="confirm-dialog__actions">
+              <button class="button button--danger" type="button" data-confirm-delete>Видалити</button>
+              <button class="button button--secondary" type="button" data-cancel-delete>Скасувати</button>
+            </div>
+          </div>
+        </dialog>
       </section>
 
       <section class="history" id="history" aria-labelledby="history-title">

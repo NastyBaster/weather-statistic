@@ -37,7 +37,10 @@ export async function signInWithGoogle() {
   const supabase = await getSupabaseClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: dashboardUrl() },
+    options: {
+      redirectTo: dashboardUrl(),
+      queryParams: { prompt: "select_account" },
+    },
   });
   if (error) throw error;
   return data;

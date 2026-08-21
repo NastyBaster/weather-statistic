@@ -22,12 +22,18 @@ export function initializeLocationsUI(repository = { createLocation, deleteLocat
   const openButtons = root.querySelectorAll("[data-open-location-form]");
   const headingOpenButton = root.querySelector(".section-heading [data-open-location-form]");
   const cancel = root.querySelector("[data-cancel-location-form]");
+  const deleteDialog = root.querySelector("[data-delete-dialog]");
+  const deleteDialogMessage = root.querySelector("[data-delete-dialog-message]");
+  const deleteDialogError = root.querySelector("[data-delete-dialog-error]");
+  const confirmDelete = root.querySelector("[data-confirm-delete]");
+  const cancelDelete = root.querySelector("[data-cancel-delete]");
   let session = null;
   let locations = [];
   let loading = false;
   let error = null;
   let requestVersion = 0;
   let returnFocus = null;
+  let pendingDelete = null;
 
   function announce(text, type = "success") {
     notice.textContent = text;
@@ -68,14 +74,7 @@ export function initializeLocationsUI(repository = { createLocation, deleteLocat
     remove.type = "button";
     remove.className = "button button--danger";
     remove.textContent = "Видалити";
-    remove.addEventListener("click", () => {
-      if (!globalThis.confirm(`Видалити місто «${location.name}»?`)) return;
-      mutate(remove, async () => {
-        await repository.deleteLocation(location.id);
-        locations = locations.filter(({ id }) => id !== location.id);
-        announce("Місто видалено.");
-      });
-    });
+    remove.addEventListener("click", () => openDeleteDialog(location, remove));
     actions.append(toggle, remove);
     item.append(info, actions);
     return item;
@@ -142,6 +141,53 @@ export function initializeLocationsUI(repository = { createLocation, deleteLocat
     form.reset();
     returnFocus?.focus();
   }
+
+  function openDeleteDialog(location, trigger) {
+    pendingDelete = { location, trigger };
+    deleteDialogMessage.textContent = `Видалити місто «${location.name}»? Цю дію неможливо скасувати.`;
+    deleteDialogError.hidden = true;
+    deleteDialogError.textContent = "";
+    deleteDialog.showModal();
+    confirmDelete.focus();
+  }
+
+  function closeDeleteDialog({ restoreFocus = true } = {}) {
+    const trigger = pendingDelete?.trigger;
+    pendingDelete = null;
+    deleteDialog.close();
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
+  }
+
+  cancelDelete.addEventListener("click", () => closeDeleteDialog());
+  deleteDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeDeleteDialog();
+  });
+  deleteDialog.addEventListener("click", (event) => {
+    if (event.target === deleteDialog) closeDeleteDialog();
+  });
+  confirmDelete.addEventListener("click", async () => {
+    if (!pendingDelete) return;
+    const { location } = pendingDelete;
+    confirmDelete.disabled = true;
+    cancelDelete.disabled = true;
+    announce("");
+    try {
+      await repository.deleteLocation(location.id);
+      locations = locations.filter(({ id }) => id !== location.id);
+      closeDeleteDialog({ restoreFocus: false });
+      announce("Місто видалено.");
+      render();
+      headingOpenButton.focus();
+    } catch (caught) {
+      deleteDialogError.textContent = caught.message || "Не вдалося видалити місто. Спробуйте ще раз.";
+      deleteDialogError.hidden = false;
+      deleteDialogError.focus();
+    } finally {
+      confirmDelete.disabled = false;
+      cancelDelete.disabled = false;
+    }
+  });
   openButtons.forEach((button) => button.addEventListener("click", openForm));
   cancel.addEventListener("click", closeForm);
   form.addEventListener("submit", async (event) => {
@@ -170,6 +216,7 @@ export function initializeLocationsUI(repository = { createLocation, deleteLocat
       locations = [];
       error = null;
       loading = false;
+      if (deleteDialog.open) closeDeleteDialog({ restoreFocus: false });
       closeForm();
       announce("");
       render();

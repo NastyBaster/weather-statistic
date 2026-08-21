@@ -92,6 +92,11 @@ test("dashboard exposes accessible location hooks and auth owns the only subscri
   assert.match(html, /aria-live="polite"/);
   assert.match(html, /<label for="location-city">/);
   assert.match(html, /Увійти, щоб зберігати міста/);
+  assert.match(html, /<dialog[^>]+data-delete-dialog/);
+  assert.match(html, /aria-labelledby="delete-dialog-title"/);
+  assert.match(html, /data-delete-dialog-error role="alert"/);
+  assert.match(ui, /deleteDialog\.showModal\(\)/);
+  assert.doesNotMatch(ui, /globalThis\.confirm/);
   assert.match(auth, /onSessionChange\(nextSession\)/);
   assert.match(ui, /locations = \[\]/);
   assert.doesNotMatch(ui, /onAuthStateChange/);

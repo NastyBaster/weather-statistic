@@ -52,6 +52,7 @@ test("login supports Google OAuth with an explicit dashboard redirect", async ()
   assert.match(auth, /auth\.signInWithOAuth/);
   assert.match(auth, /provider: "google"/);
   assert.match(auth, /redirectTo: dashboardUrl\(\)/);
+  assert.match(auth, /prompt: "select_account"/);
   assert.match(authPage, /signInWithGoogle/);
 });
 
