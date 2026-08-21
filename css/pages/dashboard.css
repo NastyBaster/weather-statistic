@@ -89,6 +89,7 @@ h1 em {
 }
 
 .dashboard,
+.locations,
 .history {
   margin-bottom: 28px;
   padding: 36px;
@@ -97,6 +98,21 @@ h1 em {
   background: rgb(255 253 247 / 78%);
   box-shadow: var(--shadow);
 }
+
+.locations-guest, .locations-state { color: var(--muted); }
+.locations-guest .button, .locations-state .button { margin-top: 12px; }
+.location-form { max-width: 620px; margin: 0 0 22px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.location-form label { display: block; margin-bottom: 8px; font-weight: 800; }
+.location-form select { width: 100%; }
+.location-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.locations-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.location-item { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.location-item strong { overflow-wrap: anywhere; display: block; }
+.location-status { display: inline-block; margin-top: 7px; padding: 4px 9px; border-radius: 99px; background: #eee8dc; color: #514a3e; font-size: .78rem; font-weight: 800; }
+.location-status--active { background: #dcefdc; color: #185b2a; }
+.locations-notice { padding: 12px 14px; border: 1px solid #8ab28e; border-radius: 10px; background: #e7f5e8; color: #185b2a; font-weight: 700; }
+.locations-notice[data-type="error"] { border-color: #c77878; background: #fff0f0; color: #7b2020; }
+.button--danger { border: 1px solid #b45555; background: transparent; color: #812727; }
 
 .stats {
   display: grid;

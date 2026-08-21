@@ -96,6 +96,33 @@
         </div>
       </section>
 
+      <section class="locations" aria-labelledby="locations-title" data-locations>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Персональний список</p>
+            <h2 id="locations-title">Мої міста</h2>
+          </div>
+          <button class="button button--primary" type="button" data-open-location-form>Додати місто</button>
+        </div>
+        <div class="locations-guest" data-locations-guest>
+          <p>Персональні міста доступні після входу. Демонстраційні Київ і Львів залишаються доступними вище.</p>
+          <a class="button button--primary" href="login.html">Увійти, щоб зберігати міста</a>
+        </div>
+        <div data-locations-personal hidden aria-busy="false">
+          <p class="locations-notice" data-locations-notice role="status" aria-live="polite" tabindex="-1" hidden></p>
+          <form class="location-form" data-location-form hidden>
+            <label for="location-city">Місто та країна</label>
+            <select id="location-city" data-city-catalog required></select>
+            <div class="location-actions">
+              <button class="button button--primary" type="submit">Зберегти місто</button>
+              <button class="button button--secondary" type="button" data-cancel-location-form>Скасувати</button>
+            </div>
+          </form>
+          <div class="locations-state" data-locations-state role="status" aria-live="polite"></div>
+          <ul class="locations-list" data-locations-list aria-label="Збережені міста"></ul>
+        </div>
+      </section>
+
       <section class="history" id="history" aria-labelledby="history-title">
         <div class="section-heading">
           <div>

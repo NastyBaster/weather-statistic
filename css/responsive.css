@@ -44,10 +44,14 @@
   }
 
   .dashboard,
+  .locations,
   .history {
     padding: 22px 16px;
     border-radius: 18px;
   }
+
+  .location-item { align-items: stretch; flex-direction: column; }
+  .location-actions .button { min-height: 44px; flex: 1 1 130px; }
 
   .section-heading {
     align-items: stretch;

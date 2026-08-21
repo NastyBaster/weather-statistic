@@ -12,16 +12,22 @@ function renderSession(session) {
   signInLink.hidden = signedIn;
 }
 
-export async function initializeDashboardAuth() {
+export async function initializeDashboardAuth({ onSessionChange = () => {} } = {}) {
   const signOutButton = document.querySelector("[data-sign-out]");
 
   try {
-    renderSession(await getCurrentSession());
-    const { data } = await onAuthStateChange((_event, session) => renderSession(session));
+    const session = await getCurrentSession();
+    renderSession(session);
+    onSessionChange(session);
+    const { data } = await onAuthStateChange((_event, nextSession) => {
+      renderSession(nextSession);
+      onSessionChange(nextSession);
+    });
     globalThis.addEventListener("pagehide", () => data.subscription.unsubscribe(), { once: true });
   } catch (error) {
     console.error("Session restoration failed", error);
     renderSession(null);
+    onSessionChange(null);
   }
 
   signOutButton.addEventListener("click", async () => {

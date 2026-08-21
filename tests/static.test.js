@@ -123,6 +123,12 @@ test("build includes every application page", async () => {
   assert.match(build, /"index\.html", "login\.html", "reset-password\.html"/);
 });
 
+test("production build copies the complete JavaScript module directory", async () => {
+  const build = await readFile(new URL("scripts/build.mjs", root), "utf8");
+  assert.match(build, /"css", "js"/);
+  await Promise.all(["js/locations.js", "js/city-catalog.js", "js/locations-ui.js"].map((path) => readFile(new URL(path, root), "utf8")));
+});
+
 test("entry page has Ukrainian language and one main landmark", async () => {
   const html = await readFile(new URL("index.html", root), "utf8");
   assert.match(html, /<html lang="uk">/);
