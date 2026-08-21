@@ -31,26 +31,31 @@ export function normalizeResponse(
   const daily = root.daily as Record<string, unknown> | undefined;
   const units = root.daily_units as Record<string, unknown> | undefined;
   if (!daily || !units || !Array.isArray(daily.time)) return fail();
-  for (const [key, allowed] of Object.entries(expectedUnits))
+  for (const [key, allowed] of Object.entries(expectedUnits)) {
     if (
       typeof units[key] !== "string" ||
       !allowed.includes((units[key] as string).toLowerCase())
-    )
+    ) {
       return fail();
+    }
+  }
   const length = daily.time.length;
-  for (const field of fields)
+  for (const field of fields) {
     if (
       !Array.isArray(daily[field]) ||
       (daily[field] as unknown[]).length !== length
-    )
+    ) {
       return fail();
+    }
+  }
   return daily.time.map((date, index) => {
     if (
       typeof date !== "string" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
       Number.isNaN(Date.parse(`${date}T00:00:00Z`))
-    )
+    ) {
       return fail();
+    }
     const lead = calendarDays(collectionDate, date);
     if (!Number.isInteger(lead) || lead < 0 || lead > 16) return fail();
     const number = (field: (typeof fields)[number]): number | null => {
@@ -71,42 +76,49 @@ export function normalizeResponse(
     if (
       result.temperatureMin !== null &&
       (result.temperatureMin < -150 || result.temperatureMin > 100)
-    )
+    ) {
       return fail();
+    }
     if (
       result.temperatureMax !== null &&
       (result.temperatureMax < -150 || result.temperatureMax > 100)
-    )
+    ) {
       return fail();
+    }
     if (
       result.temperatureMin !== null &&
       result.temperatureMax !== null &&
       result.temperatureMin > result.temperatureMax
-    )
+    ) {
       return fail();
-    if (result.precipitationSum !== null && result.precipitationSum < 0)
+    }
+    if (result.precipitationSum !== null && result.precipitationSum < 0) {
       return fail();
+    }
     if (result.windSpeedMax !== null && result.windSpeedMax < 0) return fail();
     if (
       result.precipitationProbability !== null &&
       (!Number.isInteger(result.precipitationProbability) ||
         result.precipitationProbability < 0 ||
         result.precipitationProbability > 100)
-    )
+    ) {
       return fail();
+    }
     if (
       result.weatherCode !== null &&
       (!Number.isInteger(result.weatherCode) ||
         result.weatherCode < 0 ||
         result.weatherCode > 99)
-    )
+    ) {
       return fail();
+    }
     if (
       Object.values(result)
         .slice(1)
         .every((item) => item === null)
-    )
+    ) {
       return fail();
+    }
     return result;
   });
 }

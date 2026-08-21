@@ -11,13 +11,15 @@ const json = (body: unknown, status = 200) =>
     },
   });
 export async function handler(request: Request, env = Deno.env) {
-  if (request.method !== "POST")
+  if (request.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405);
+  }
   const url = env.get("SUPABASE_URL"),
     anon = env.get("SUPABASE_ANON_KEY"),
     service = env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !anon || !service)
+  if (!url || !anon || !service) {
     return json({ error: "service_unavailable" }, 503);
+  }
   const auth = createClient(url, anon, { auth: { persistSession: false } });
   const decision = await authorize(
     request,

@@ -24,8 +24,9 @@ export function buildForecastUrl(
     !Number.isFinite(longitude) ||
     longitude < -180 ||
     longitude > 180
-  )
+  ) {
     throw new ProviderError("invalid_location", false);
+  }
   try {
     new Intl.DateTimeFormat("en", { timeZone: timezone }).format();
   } catch {
@@ -75,15 +76,18 @@ export async function fetchForecast(
     if (
       signal.aborted ||
       (error instanceof DOMException && error.name === "AbortError")
-    )
+    ) {
       throw new ProviderError("timeout", true);
+    }
     throw new ProviderError("network", true);
   }
   if (!response.ok) {
-    if (response.status === 429)
+    if (response.status === 429) {
       throw new ProviderError("rate_limited", true, retryAfter(response));
-    if (response.status >= 500)
+    }
+    if (response.status >= 500) {
       throw new ProviderError("provider_5xx", true, retryAfter(response));
+    }
     throw new ProviderError("invalid_request", false);
   }
   let body: unknown;

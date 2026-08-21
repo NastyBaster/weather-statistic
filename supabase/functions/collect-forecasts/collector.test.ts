@@ -65,65 +65,73 @@ Deno.test("normalizes valid and nullable responses without rounding", () => {
     10.5,
   );
   const body = valid();
-  for (const key of Object.keys(body.daily))
+  for (const key of Object.keys(body.daily)) {
     if (key !== "time") (body.daily as Record<string, unknown[]>)[key] = [null];
+  }
   (body.daily.temperature_2m_min as unknown[]) = [1.25];
   assertEquals(normalizeResponse(body, "2026-08-21")[0].precipitationSum, null);
 });
 
-for (const [name, mutate] of [
-  ["missing daily", (body: MalformedResponse) => delete body.daily],
-  [
-    "array mismatch",
-    (body: MalformedResponse) => body.daily.weather_code.push(2),
-  ],
-  [
-    "invalid date",
-    (body: MalformedResponse) => (body.daily.time[0] = "22-08-2026"),
-  ],
-  [
-    "invalid number",
-    (body: MalformedResponse) => (body.daily.temperature_2m_min[0] = NaN),
-  ],
-  [
-    "probability below zero",
-    (body: MalformedResponse) =>
-      (body.daily.precipitation_probability_max[0] = -1),
-  ],
-  [
-    "probability above 100",
-    (body: MalformedResponse) =>
-      (body.daily.precipitation_probability_max[0] = 101),
-  ],
-  [
-    "non-integer probability",
-    (body: MalformedResponse) =>
-      (body.daily.precipitation_probability_max[0] = 1.5),
-  ],
-  [
-    "negative precipitation",
-    (body: MalformedResponse) => (body.daily.precipitation_sum[0] = -1),
-  ],
-  [
-    "negative wind",
-    (body: MalformedResponse) => (body.daily.wind_speed_10m_max[0] = -1),
-  ],
-  [
-    "min above max",
-    (body: MalformedResponse) => (body.daily.temperature_2m_min[0] = 30),
-  ],
-  [
-    "all null",
-    (body: MalformedResponse) =>
-      Object.keys(body.daily)
-        .filter((k) => k !== "time")
-        .forEach((k) => (body.daily[k][0] = null)),
-  ],
-  [
-    "invalid units",
-    (body: MalformedResponse) => (body.daily_units.wind_speed_10m_max = "mph"),
-  ],
-] as const)
+for (
+  const [name, mutate] of [
+    ["missing daily", (body: MalformedResponse) => delete body.daily],
+    [
+      "array mismatch",
+      (body: MalformedResponse) => body.daily.weather_code.push(2),
+    ],
+    [
+      "invalid date",
+      (body: MalformedResponse) => (body.daily.time[0] = "22-08-2026"),
+    ],
+    [
+      "invalid number",
+      (body: MalformedResponse) => (body.daily.temperature_2m_min[0] = NaN),
+    ],
+    [
+      "probability below zero",
+      (
+        body: MalformedResponse,
+      ) => (body.daily.precipitation_probability_max[0] = -1),
+    ],
+    [
+      "probability above 100",
+      (
+        body: MalformedResponse,
+      ) => (body.daily.precipitation_probability_max[0] = 101),
+    ],
+    [
+      "non-integer probability",
+      (
+        body: MalformedResponse,
+      ) => (body.daily.precipitation_probability_max[0] = 1.5),
+    ],
+    [
+      "negative precipitation",
+      (body: MalformedResponse) => (body.daily.precipitation_sum[0] = -1),
+    ],
+    [
+      "negative wind",
+      (body: MalformedResponse) => (body.daily.wind_speed_10m_max[0] = -1),
+    ],
+    [
+      "min above max",
+      (body: MalformedResponse) => (body.daily.temperature_2m_min[0] = 30),
+    ],
+    [
+      "all null",
+      (body: MalformedResponse) =>
+        Object.keys(body.daily)
+          .filter((k) => k !== "time")
+          .forEach((k) => (body.daily[k][0] = null)),
+    ],
+    [
+      "invalid units",
+      (
+        body: MalformedResponse,
+      ) => (body.daily_units.wind_speed_10m_max = "mph"),
+    ],
+  ] as const
+) {
   Deno.test(`normalization rejects ${name}`, () => {
     const body = valid();
     mutate(body);
@@ -132,6 +140,7 @@ for (const [name, mutate] of [
       ProviderError,
     );
   });
+}
 
 Deno.test(
   "local dates honor UTC boundary, Kyiv, negative offset, and DST",
@@ -162,11 +171,13 @@ Deno.test(
 Deno.test(
   "provider classifies HTTP failures and never exposes response body",
   async () => {
-    for (const [status, code, retryable] of [
-      [429, "rate_limited", true],
-      [503, "provider_5xx", true],
-      [400, "invalid_request", false],
-    ] as const) {
+    for (
+      const [status, code, retryable] of [
+        [429, "rate_limited", true],
+        [503, "provider_5xx", true],
+        [400, "invalid_request", false],
+      ] as const
+    ) {
       const error = await fetchForecast(
         { latitude: 1, longitude: 2, timezone: "UTC" },
         new AbortController().signal,
@@ -206,11 +217,12 @@ Deno.test(
     const delays: number[] = [];
     await withRetry(
       async () => {
-        if (++calls < 3)
+        if (++calls < 3) {
           throw new ProviderError(
             calls === 1 ? "network" : "provider_5xx",
             true,
           );
+        }
         return "ok";
       },
       {
@@ -263,8 +275,9 @@ Deno.test("timeout is retried and maximum attempts are enforced", async () => {
         (signal) =>
           new Promise((_resolve, reject) => {
             calls++;
-            signal.addEventListener("abort", () =>
-              reject(new ProviderError("timeout", true)),
+            signal.addEventListener(
+              "abort",
+              () => reject(new ProviderError("timeout", true)),
             );
           }),
         { attempts: 2, timeoutMs: 1, sleep: () => Promise.resolve() },

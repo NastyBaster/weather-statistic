@@ -36,8 +36,9 @@ export async function mapConcurrent<T, R>(
   limit: number,
   worker: (value: T) => Promise<R>,
 ): Promise<R[]> {
-  if (!Number.isInteger(limit) || limit < 1)
+  if (!Number.isInteger(limit) || limit < 1) {
     throw new Error("invalid concurrency");
+  }
   const results = new Array<R>(values.length);
   let next = 0;
   await Promise.all(
@@ -58,8 +59,8 @@ export function terminalStatus(
   return success === 0 && failed > 0
     ? "failed"
     : failed > 0
-      ? "partial"
-      : "succeeded";
+    ? "partial"
+    : "succeeded";
 }
 
 export async function collect(
@@ -103,7 +104,7 @@ export async function collect(
                 timezone: group.timezone,
               },
               signal,
-            ),
+            )
           );
           const rows = group.locations.flatMap((location) =>
             response.days.map((day) => ({
@@ -118,7 +119,7 @@ export async function collect(
               precipitation_probability: day.precipitationProbability,
               wind_speed_max: day.windSpeedMax,
               weather_code: day.weatherCode,
-            })),
+            }))
           );
           const { data, error } = await db
             .from("forecast_snapshots")
@@ -157,10 +158,12 @@ export async function collect(
   const status = terminalStatus(succeeded, failed),
     completedAt = now().toISOString();
   const message = failed
-    ? `${failed} of ${locations.length} locations failed: ${[...new Set(errors)].join(", ")}`.slice(
-        0,
-        1000,
-      )
+    ? `${failed} of ${locations.length} locations failed: ${
+      [...new Set(errors)].join(", ")
+    }`.slice(
+      0,
+      1000,
+    )
     : null;
   const { error: completionError } = await db
     .from("forecast_runs")
@@ -185,8 +188,10 @@ export async function collect(
     completedAt,
     ...(failed
       ? {
-          message: `${failed} location${failed === 1 ? "" : "s"} could not be collected`,
-        }
+        message: `${failed} location${
+          failed === 1 ? "" : "s"
+        } could not be collected`,
+      }
       : {}),
   };
 }

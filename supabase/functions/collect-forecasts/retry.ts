@@ -16,8 +16,7 @@ export async function withRetry<T>(
     timeoutMs = options.timeoutMs ?? 10_000,
     base = options.baseDelayMs ?? 250,
     cap = options.maxDelayMs ?? 5_000;
-  const sleep =
-      options.sleep ??
+  const sleep = options.sleep ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     random = options.random ?? Math.random;
   let last: unknown;
@@ -27,16 +26,16 @@ export async function withRetry<T>(
     try {
       return await operation(controller.signal, attempt);
     } catch (error) {
-      last =
-        controller.signal.aborted && !(error instanceof ProviderError)
-          ? new ProviderError("timeout", true)
-          : error;
+      last = controller.signal.aborted && !(error instanceof ProviderError)
+        ? new ProviderError("timeout", true)
+        : error;
       if (
         !(last instanceof ProviderError) ||
         !last.retryable ||
         attempt === attempts
-      )
+      ) {
         throw last;
+      }
       const exponential = Math.min(cap, base * 2 ** (attempt - 1));
       const delay = Math.min(
         cap,

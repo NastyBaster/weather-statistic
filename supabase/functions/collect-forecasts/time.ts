@@ -15,8 +15,9 @@ export function localDate(instant: Date, timezone: string): string {
 }
 
 export function calendarDays(from: string, to: string): number {
-  if (!ISO_DATE.test(from) || !ISO_DATE.test(to))
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to)) {
     throw new Error("invalid date");
+  }
   return (
     (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
     86_400_000
