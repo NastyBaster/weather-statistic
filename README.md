@@ -77,3 +77,12 @@ npm run check
 Початкова міграція `supabase/migrations/202608170001_create_profiles_and_locations.sql` створює `profiles`, `locations`, індекси, RLS-політики та публічну RPC-перевірку `health_check`. Міграція `supabase/migrations/202608170002_create_profile_on_signup.sql` додає trigger, який автоматично створює `profiles` після реєстрації користувача.
 
 Застосовуйте кожну нову міграцію спочатку до `weather-statistic-dev`, перевіряйте реєстрацію, RLS та PR preview, а після схвалення — до `weather-statistic-prod`. Не редагуйте вже застосовані міграції та не додавайте database password, secret key або `service_role` key у браузерну конфігурацію.
+
+## Forecast Reality Check 5.0
+
+Етап 5.0 фіксує контракт даних до реалізації collector. Нова міграція додає operational runs та незмінні daily snapshots із local-date horizon, idempotency key, constraints, indexes і read-only ownership RLS. Open-Meteo обрано на підставі офіційної документації, але frontend іще не виконує weather API requests.
+
+- Повне рішення щодо provider, canonical units, timezone/date semantics, retry, partial failure, ownership, каскадного видалення та service-role boundary: [`docs/architecture/forecast-data-contract.md`](docs/architecture/forecast-data-contract.md).
+- Точний план застосування лише до development і двокористувацької runtime-перевірки RLS/immutability/cascade: [`docs/validation/forecast-schema-development.md`](docs/validation/forecast-schema-development.md).
+
+Production migration дозволена лише після успішної development validation та review. Edge Function, adapter, manual trigger, scheduler, observations, accuracy calculations і real-data dashboard відкладені до наступних етапів.
