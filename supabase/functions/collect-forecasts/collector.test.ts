@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { authorize, parseAllowlist } from "./auth.ts";
 import { groupLocations, mapConcurrent, terminalStatus } from "./collector.ts";
 import { normalizeResponse } from "./normalize.ts";
@@ -216,14 +216,14 @@ Deno.test(
     let calls = 0;
     const delays: number[] = [];
     await withRetry(
-      async () => {
+      () => {
         if (++calls < 3) {
           throw new ProviderError(
             calls === 1 ? "network" : "provider_5xx",
             true,
           );
         }
-        return "ok";
+        return Promise.resolve("ok");
       },
       {
         sleep: (ms) => {
@@ -240,7 +240,7 @@ Deno.test(
     await assertRejects(
       () =>
         withRetry(
-          async () => {
+          () => {
             calls++;
             throw new ProviderError("rate_limited", true, 99_000);
           },
@@ -257,7 +257,7 @@ Deno.test("retry does not retry 4xx or contract mismatch", async () => {
     let calls = 0;
     await assertRejects(
       () =>
-        withRetry(async () => {
+        withRetry(() => {
           calls++;
           throw new ProviderError(code, false);
         }),
