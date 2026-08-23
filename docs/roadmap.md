@@ -27,7 +27,7 @@ deploy, invoke, or operate them.
 | 5.1.1 | Authorized production rollout and validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
-| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Repository implementation is ready for review; remote development validation is pending. Production configuration and enablement require separate explicit authorization.** | **In progress** |
+| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Repository hardening is under review; local database and remote development validation remain pending. Production configuration and enablement require separate explicit authorization.** | **In progress** |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | Planned |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
 | 7.0 | Observation provider contract and immutable observation schema | Planned |

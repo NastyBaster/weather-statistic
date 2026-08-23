@@ -5,10 +5,30 @@ export type RetryOptions = {
   timeoutMs?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   random?: () => number;
   signal?: AbortSignal;
+  remainingMs?: () => number;
 };
+
+export function abortableSleep(
+  milliseconds: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return Promise.reject(new ProviderError("timeout", true));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(finish, milliseconds);
+    signal.addEventListener("abort", abort, { once: true });
+    function finish() {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }
+    function abort() {
+      clearTimeout(timer);
+      reject(new ProviderError("timeout", true));
+    }
+  });
+}
 export async function withRetry<T>(
   operation: (signal: AbortSignal, attempt: number) => Promise<T>,
   options: RetryOptions = {},
@@ -17,16 +37,20 @@ export async function withRetry<T>(
     timeoutMs = options.timeoutMs ?? 10_000,
     base = options.baseDelayMs ?? 250,
     cap = options.maxDelayMs ?? 5_000;
-  const sleep = options.sleep ??
-      ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+  const sleep = options.sleep ?? abortableSleep,
     random = options.random ?? Math.random;
   let last: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     if (options.signal?.aborted) throw new ProviderError("timeout", true);
+    const remaining = options.remainingMs?.() ?? Number.POSITIVE_INFINITY;
+    if (remaining <= 0) throw new ProviderError("timeout", true);
     const controller = new AbortController();
     const abort = () => controller.abort();
     options.signal?.addEventListener("abort", abort, { once: true });
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(
+      () => controller.abort(),
+      Math.min(timeoutMs, remaining),
+    );
     try {
       return await operation(controller.signal, attempt);
     } catch (error) {
@@ -45,7 +69,12 @@ export async function withRetry<T>(
         cap,
         last.retryAfterMs ?? exponential * (0.5 + random() * 0.5),
       );
-      await sleep(delay);
+      const remainingAfterAttempt = options.remainingMs?.() ??
+        Number.POSITIVE_INFINITY;
+      if (delay >= remainingAfterAttempt) {
+        throw new ProviderError("timeout", true);
+      }
+      await sleep(delay, options.signal ?? controller.signal);
     } finally {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", abort);

@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { authorize, parseAllowlist } from "./auth.ts";
+import { authorize, isValidSchedulerToken, parseAllowlist } from "./auth.ts";
 import { groupLocations, mapConcurrent, terminalStatus } from "./collector.ts";
 import { normalizeResponse } from "./normalize.ts";
 import {
@@ -11,7 +11,12 @@ import {
 import { withRetry } from "./retry.ts";
 import { localDate } from "./time.ts";
 import { ProviderError } from "./types.ts";
-import { collectionHttpStatus } from "./index.ts";
+import {
+  collectionHttpStatus,
+  hasDisallowedApplicationHeader,
+  hasJsonContentType,
+} from "./index.ts";
+import { abortableSleep } from "./retry.ts";
 
 // Test mutations intentionally exercise malformed external JSON.
 // deno-lint-ignore no-explicit-any
@@ -59,6 +64,148 @@ Deno.test(
     );
   },
 );
+
+Deno.test("scheduler credential has exact base64url 32-byte shape", async () => {
+  const valid = "A".repeat(43);
+  assert(isValidSchedulerToken(valid));
+  for (
+    const malformed of [
+      undefined,
+      "A".repeat(42),
+      "A".repeat(44),
+      `${"A".repeat(42)}=`,
+      `${"A".repeat(42)}+`,
+      `${"A".repeat(42)} `,
+      `${"A".repeat(42)}Ж`,
+    ]
+  ) assertEquals(isValidSchedulerToken(malformed), false);
+
+  const allow = parseAllowlist("admin-id");
+  const client = (id: string | null) => ({
+    auth: {
+      getUser: (_token: string) =>
+        Promise.resolve({ data: { user: id ? { id } : null }, error: null }),
+    },
+  });
+  assertEquals(
+    await authorize(
+      new Request("https://x", {
+        headers: { authorization: `Bearer ${valid}` },
+      }),
+      client(null),
+      allow,
+      valid,
+    ),
+    { triggerType: "scheduled" },
+  );
+  assertEquals(
+    await authorize(
+      new Request("https://x", {
+        headers: { authorization: `Bearer ${valid.slice(0, -1)}B` },
+      }),
+      client(null),
+      allow,
+      valid,
+    ),
+    401,
+  );
+  assertEquals(
+    await authorize(
+      new Request("https://x", {
+        headers: { authorization: "Bearer manual-jwt" },
+      }),
+      client("admin-id"),
+      allow,
+      valid,
+    ),
+    { triggerType: "manual" },
+  );
+});
+
+Deno.test("request surface accepts only JSON and reviewed gateway headers", () => {
+  for (
+    const value of [
+      "application/json",
+      "Application/JSON",
+      "application/json; charset=UTF-8",
+    ]
+  ) {
+    assert(hasJsonContentType(new Headers({ "content-type": value })));
+  }
+  for (
+    const value of [
+      "text/json",
+      "application/json; charset=utf-16",
+      "application/json; profile=x",
+    ]
+  ) {
+    assertEquals(
+      hasJsonContentType(new Headers({ "content-type": value })),
+      false,
+    );
+  }
+  assertEquals(
+    hasDisallowedApplicationHeader(
+      new Headers({ "x-forwarded-for": "127.0.0.1", apikey: "public" }),
+    ),
+    false,
+  );
+  for (
+    const name of [
+      "x-trigger-type",
+      "x-caller-time",
+      "x-scheduler-slot",
+      "x-identity",
+      "trigger",
+      "scheduler-slot",
+    ]
+  ) {
+    assert(hasDisallowedApplicationHeader(new Headers({ [name]: "spoof" })));
+  }
+});
+
+Deno.test("overall abort interrupts retry backoff", async () => {
+  const controller = new AbortController();
+  let attempts = 0;
+  let enteredSleep = false;
+  await assertRejects(
+    () =>
+      withRetry(
+        () => {
+          attempts++;
+          throw new ProviderError("network", true);
+        },
+        {
+          signal: controller.signal,
+          random: () => 0,
+          sleep: (_milliseconds, signal) => {
+            enteredSleep = true;
+            controller.abort();
+            return abortableSleep(1_000, signal);
+          },
+        },
+      ),
+    ProviderError,
+  );
+  assert(enteredSleep);
+  assertEquals(attempts, 1);
+});
+
+Deno.test("retry does not start an attempt without remaining budget", async () => {
+  let attempts = 0;
+  await assertRejects(
+    () =>
+      withRetry(
+        () => {
+          attempts++;
+          return Promise.resolve("unexpected");
+        },
+        { remainingMs: () => 0 },
+      ),
+    ProviderError,
+  );
+  assertEquals(attempts, 0);
+});
 
 Deno.test("normalizes valid and nullable responses without rounding", () => {
   assertEquals(
@@ -350,8 +497,14 @@ Deno.test(
       },
     });
     const allow = parseAllowlist(" admin-id, second-id ");
+    const configuredSchedulerToken = "A".repeat(43);
     assertEquals(
-      await authorize(new Request("https://x"), client(null), allow, "machine"),
+      await authorize(
+        new Request("https://x"),
+        client(null),
+        allow,
+        configuredSchedulerToken,
+      ),
       401,
     );
     assertEquals(
@@ -359,7 +512,7 @@ Deno.test(
         new Request("https://x", { headers: { authorization: "Bearer bad" } }),
         client(null, {}),
         allow,
-        "machine",
+        configuredSchedulerToken,
       ),
       401,
     );
@@ -370,7 +523,7 @@ Deno.test(
         }),
         client({ id: "other" }),
         allow,
-        "machine",
+        configuredSchedulerToken,
       ),
       403,
     );
@@ -383,18 +536,18 @@ Deno.test(
         }),
         client({ id: "admin-id" }),
         allow,
-        "machine",
+        configuredSchedulerToken,
       ),
       { triggerType: "manual" },
     );
     assertEquals(
       await authorize(
         new Request("https://x", {
-          headers: { authorization: "Bearer machine" },
+          headers: { authorization: `Bearer ${configuredSchedulerToken}` },
         }),
         client(null),
         allow,
-        "machine",
+        configuredSchedulerToken,
       ),
       { triggerType: "scheduled" },
     );

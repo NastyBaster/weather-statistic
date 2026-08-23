@@ -7,14 +7,28 @@ export type AuthClient = {
 };
 export type Authorization = { triggerType: "manual" | "scheduled" };
 
-function constantTimeEqual(left: string, right: string): boolean {
-  const encoder = new TextEncoder();
-  const a = encoder.encode(left);
-  const b = encoder.encode(right);
-  let difference = a.length ^ b.length;
-  const length = Math.max(a.length, b.length);
-  for (let index = 0; index < length; index++) {
-    difference |= (a[index] ?? 0) ^ (b[index] ?? 0);
+const SCHEDULER_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+export function isValidSchedulerToken(
+  value: string | undefined,
+): value is string {
+  if (!value || !SCHEDULER_TOKEN_PATTERN.test(value)) return false;
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+  try {
+    return Uint8Array.from(
+      atob(normalized),
+      (character) => character.charCodeAt(0),
+    ).length === 32;
+  } catch {
+    return false;
+  }
+}
+
+function constantTimeSchedulerTokenEqual(left: string, right: string): boolean {
+  if (!SCHEDULER_TOKEN_PATTERN.test(left)) return false;
+  let difference = 0;
+  for (let index = 0; index < 43; index++) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
   return difference === 0;
 }
@@ -35,7 +49,7 @@ export async function authorize(
   const header = request.headers.get("authorization");
   if (!header || !/^Bearer [^\s]+$/.test(header)) return 401;
   const token = header.slice(7);
-  if (constantTimeEqual(token, schedulerToken)) {
+  if (constantTimeSchedulerTokenEqual(token, schedulerToken)) {
     return { triggerType: "scheduled" };
   }
   const { data, error } = await client.auth.getUser(token);

@@ -20,14 +20,31 @@ Edge Function was deployed, or a Cron job was enabled. Production was not access
 - Stale recovery deliberately does not assign or reconstruct `snapshots_created`.
 - The collector writes snapshot batches only through a transactional RPC. Both that RPC and a
   `BEFORE INSERT` guard lock the parent and require it to remain `running`.
-- The migration grants the two operational RPCs only to `service_role`; browser RLS and grants are
-  unchanged.
+- A separate service-role-only `finalize_forecast_run` RPC locks the run parent, accepts only a
+  still-running run, supplies database transaction time for completion, and returns only
+  `finalized` or `run_no_longer_running`. Late collectors cannot replace stale-recovery evidence.
+- The collector uses a monotonic 120-second budget with a 10-second terminalization reserve;
+  provider attempts, backoff sleeps, database setup, and snapshot writes are deadline-aware.
+- The scheduler credential is validated as exactly 32 bytes encoded as 43 unpadded base64url ASCII
+  characters before authentication is enabled. Invalid managed configuration fails closed.
+- The request surface requires JSON `{}` and permits only reviewed gateway/application headers;
+  request data cannot select trigger, identity, retry, slot, or caller time.
+- The migrations grant all three operational RPCs only to `service_role`; browser RLS and grants
+  are unchanged.
 
 ## Local checks
 
-`npm run check` passes. Deno is unavailable in this workspace, so the required formatting, lint,
-type-check, and Edge Function tests remain mandatory in the execution environment before remote
-development work.
+Repository tests now include mocked handler/collector behavior, deterministic deadline and
+abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
+at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive
+stale claiming, counter preservation, batch atomicity and idempotency, finalize fencing,
+single-flight concurrency, failed replacement rollback, both parent-lock orderings, deletion, and
+snapshot immutability. Run it with `npm run test:db` against a disposable local Supabase stack.
+
+In the repository hardening workspace, Node checks are available. Deno, Supabase CLI, Docker, and
+`psql` availability must be recorded from the final check run; a missing tool is not treated as a
+passing result. Remote development validation remains pending and no production environment was
+accessed or changed.
 
 ## Development execution gate
 
@@ -42,6 +59,11 @@ environment.
 Run every case in the Stage 5.2.0 development validation matrix, including the inclusive stale
 boundary, both lock orderings, failed-transaction rollback, no-active-location behavior, and
 sanitized response/log review. Capture only categories, UTC windows, and aggregate counters.
+
+Before scheduler enablement, the local database suite and all Deno checks must pass, then the
+reviewed migrations and function must be validated against an explicitly confirmed development
+target. The complete remote matrix, bounded transport evidence, and disable/no-later-delivery
+verification remain required. Repository tests alone do not satisfy those gates.
 
 At the end of validation, disable or unschedule the development job and verify that no later
 delivery occurs. Do not configure or enable production without a separately confirmed production

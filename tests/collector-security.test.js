@@ -3,9 +3,24 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-const files = (directory) => readdirSync(directory, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? files(join(directory, entry.name)) : [join(directory, entry.name)]);
+const files = (directory) =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? files(join(directory, entry.name))
+      : entry.isFile()
+      ? [join(directory, entry.name)]
+      : []
+  );
 const frontend = files("js").map((path) => readFileSync(path, "utf8")).join("\n");
-const repositorySources = files(".").filter((path) => !path.startsWith(".git/") && !path.startsWith("dist/")).map((path) => readFileSync(path, "utf8")).join("\n");
+const repositorySources = files(".")
+  .filter((path) => {
+    const normalized = path.replaceAll("\\", "/");
+    return !normalized.startsWith(".git/") &&
+      !normalized.startsWith("dist/") &&
+      !normalized.startsWith("node_modules/");
+  })
+  .map((path) => readFileSync(path, "utf8"))
+  .join("\n");
 
 test("collector trust boundary remains outside frontend", () => {
   assert.doesNotMatch(frontend, /api\.open-meteo\.com/i);
@@ -32,16 +47,25 @@ test("scheduler uses database-enforced claim and snapshot write paths", () => {
 
 test("collector fences terminal updates and applies the overall deadline", () => {
   const collector = readFileSync("supabase/functions/collect-forecasts/collector.ts", "utf8");
+  assert.match(collector, /rpc\(\s*"finalize_forecast_run"/);
+  assert.doesNotMatch(collector, /from\("forecast_runs"\)[\s\S]{0,200}\.update\(/);
   assert.match(
     collector,
-    /\.eq\("id", runId\)[\s\S]{0,100}\.eq\("status", "running"\)[\s\S]{0,100}\.select\("id"\)/,
+    /const overallMs = options\.overallMs \?\? 120_000/,
   );
-  assert.match(collector, /completedRuns\?\.length !== 1/);
-  assert.match(
-    collector,
-    /const deadlineTimer = setTimeout\(\(\) => deadline\.abort\(\), 120_000\)/,
-  );
-  assert.match(collector, /\.abortSignal\(deadline\.signal\)/);
+  assert.match(collector, /terminalReserveMs = options\.terminalReserveMs \?\? 10_000/);
+  assert.match(collector, /\.abortSignal\((?:work|overall)Deadline\.signal\)/);
+});
+
+test("finalization is a service-role-only row-locking RPC", () => {
+  const migration = readFileSync("supabase/migrations/202608240001_finalize_forecast_runs.sql", "utf8");
+  assert.match(migration, /for update/i);
+  assert.match(migration, /transaction_timestamp\(\)/i);
+  assert.match(migration, /run_no_longer_running/i);
+  assert.match(migration, /revoke all[\s\S]+from public/i);
+  assert.match(migration, /grant execute[\s\S]+to service_role/i);
+  assert.doesNotMatch(migration, /update\s+public\.forecast_snapshots/i);
+  assert.doesNotMatch(migration, /delete\s+from\s+public\.forecast_snapshots/i);
 });
 
 test("no credential-shaped literal is committed", () => {
