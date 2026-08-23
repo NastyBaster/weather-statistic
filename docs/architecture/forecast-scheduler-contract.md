@@ -15,6 +15,8 @@ GitHub's [`schedule` event](https://docs.github.com/en/actions/reference/workflo
 and [Actions secrets](https://docs.github.com/en/actions/concepts/security/secrets); Cloudflare's
 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/); and
 upstream [`pg_cron`](https://github.com/citusdata/pg_cron). No large excerpts are reproduced.
+PostgreSQL's official [row-level lock modes and conflict table](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS)
+were also checked for the `FOR UPDATE` / `FOR NO KEY UPDATE` write-fence semantics below.
 
 ## 1. Context and constraints
 
@@ -109,21 +111,85 @@ Scheduler timezone never changes location timezone semantics: `collection_date` 
 
 ## 7. Overlap, idempotency, and concurrency
 
-Stage 5.2.1 adds, in a new migration, an atomic database claim operation and invariant. Eligibility
-for stale recovery is exactly `trigger_type='scheduled'`, `status='running'`, and `started_at`
-older than 15 minutes according to database/server time; caller-provided time is never used.
+Stage 5.2.1 adds the following database-enforced protocol in a new migration. A scheduled run is
+stale exactly when, under database transaction time:
 
-1. Under a transaction advisory lock with a fixed documented application key, inspect running
-   scheduled runs.
-2. If one is younger than **15 minutes**, create no run and return 409
-   `scheduled_run_active`.
-3. If one is stale, calculate the exact count of existing `forecast_snapshots` rows referencing
-   it, then update it to `status='failed'`, `completed_at` equal to database transaction time,
-   `locations_succeeded=0`, `locations_failed=locations_total`, `snapshots_created` equal to that
-   calculated count, and fixed `error_message='stale scheduled run recovered'`.
-4. Only after that terminal update succeeds in the same atomic database operation may the
-   replacement scheduled run be inserted. The stale update and replacement claim commit together.
-5. A partial unique index permits at most one `running` row with `trigger_type='scheduled'`.
+```text
+trigger_type = 'scheduled'
+status = 'running'
+database_transaction_time - started_at >= interval '15 minutes'
+```
+
+An age below 15 minutes is fresh and recovery is forbidden; exactly 15 minutes and more than 15
+minutes are stale and recovery-eligible. The eligibility clock is database transaction time, not
+the Edge runtime clock, scheduler time, or a caller-supplied header/body value. Recovery must
+recheck all three predicates inside its transaction after acquiring the required parent-run lock.
+
+### 7.1 Snapshot insertion transaction and write fence
+
+Every trusted collector transaction that inserts one or a batch of snapshots for a
+`forecast_run_id` must, in the same database transaction before the insert, lock the parent
+`public.forecast_runs` row with `SELECT ... FOR NO KEY UPDATE`, prove that the parent exists and
+has `status='running'`, and retain that row lock through commit or rollback. If the parent is
+missing or non-running, the whole batch is rejected: no snapshot from it is inserted and only a
+reviewed machine-readable sanitized category is returned, never raw SQL/database detail.
+
+Stage 5.2.1 implements a reviewed database function/RPC as the canonical collector snapshot-batch
+write path. Under the parent lock, that RPC performs immutable `INSERT ... ON CONFLICT DO NOTHING`
+and returns only the required sanitized inserted IDs/counters. It never updates an existing
+snapshot. The collector replaces every direct snapshot upsert with this RPC; parent-state check,
+lock, and actual batch insert are one atomic database operation/transaction.
+
+A `BEFORE INSERT` trigger on `public.forecast_snapshots` is the database invariant guard against
+RPC bypass or any technically possible trusted direct insert. In the inserting transaction it
+locks the corresponding parent row `FOR NO KEY UPDATE` and rejects an insert whose parent is not
+`running`. When the RPC is used, its explicit parent lock and the trigger checks participate in
+the same transaction; they are not independent lock transactions. A rejected multi-row statement
+or RPC batch inserts no rows. The trigger never updates or deletes snapshots.
+
+The write path must not rely only on a TypeScript pre-check, an unlocked `SELECT`, an advisory lock
+that the snapshot writer does not take, a check in another transaction, or a best-effort
+convention. Database-side enforcement is mandatory for every collector snapshot write.
+
+### 7.2 Scheduled claim and stale-recovery transaction
+
+1. Acquire the scheduler-wide advisory **transaction** lock with the fixed documented application
+   key; it serializes scheduled claim/recovery callers, while the parent row lock is the distinct
+   per-run snapshot-write fence.
+2. Select the candidate scheduled running run and lock its parent row with
+   `SELECT ... FOR UPDATE`.
+3. After the parent lock is acquired, recheck `trigger_type='scheduled'`, `status='running'`, and
+   `database_transaction_time - started_at >= interval '15 minutes'` using the transaction's
+   database time. If age is below 15 minutes, create no run and return 409
+   `scheduled_run_active`; caller-provided time cannot affect this result.
+4. While retaining the parent lock, calculate the exact linked-row count with
+   `SELECT COUNT(*) FROM public.forecast_snapshots WHERE forecast_run_id = stale_run_id`.
+5. Without releasing either lock, update the stale row to `status='failed'`, `completed_at` equal
+   to database transaction time, `locations_succeeded=0`,
+   `locations_failed=locations_total`, `snapshots_created` equal to that count, and fixed
+   `error_message='stale scheduled run recovered'`.
+6. In the same transaction, insert the replacement running scheduled claim. A partial unique
+   index permits at most one `running` row with `trigger_type='scheduled'`.
+7. Commit stale terminalization and replacement together. If selection, locking, recheck, count,
+   update, or replacement fails/conflicts, roll back the entire transaction: this attempt does not
+   terminalize the stale run, creates no replacement, starts no provider collection, and returns
+   only a sanitized non-success category.
+
+PostgreSQL defines `FOR UPDATE` and `FOR NO KEY UPDATE` as conflicting row locks retained until
+transaction end. Therefore the required happens-before behavior is:
+
+- If a snapshot writer locks the parent first, recovery waits. After that batch commits or rolls
+  back, recovery acquires `FOR UPDATE`; its count includes every committed linked snapshot.
+- If recovery locks the parent first, a late snapshot writer waits. Recovery counts, terminalizes,
+  and commits; the writer then locks and checks the updated parent, sees `failed`, and its entire
+  batch is rejected.
+
+No snapshot can commit between the final count and stale terminalization or after terminalization
+for that run. The stale `snapshots_created` value is the exact linked-row count at stale-recovery
+transaction commit, protected from concurrent late collector inserts. It is not a promise of the
+linked-row count forever: a later lawful deletion of a user-owned location may cascade-delete its
+snapshot history under the data contract without rewriting the historical run counter. Recovery
+itself never updates or deletes immutable snapshots.
 
 The run owns single-flight state for its entire `running` lifetime; terminal status leaves the
 index predicate, so no lease cleanup exists. At most one concurrent caller can terminalize a stale
@@ -136,7 +202,7 @@ Best-effort terminalization followed by replacement is forbidden.
 
 `locations_succeeded=0` is a conservative recovery classification because process loss prevents
 proof of which location operations completed provider-side. `snapshots_created` reports durable
-rows actually linked to the stale run; neither counter proves that no provider call occurred.
+rows linked to the stale run at recovery commit; neither counter proves that no provider call occurred.
 Recovery never updates or deletes immutable snapshots and never deletes the stale run. The exact
 values satisfy existing run constraints: failed has zero succeeded locations, failed plus
 succeeded does not exceed total, terminal status has `completed_at`, and the fixed error is under
@@ -156,8 +222,9 @@ invalid input/request, auth, provider/schema contract, and normalized validation
 
 Cron submits **exactly one automatic delivery attempt per daily slot and performs no automatic
 retry**. A missed or failed delivery creates no automatic run. A timeout does not prove execution
-stopped: wait through the 15-minute stale threshold and inspect sanitized state. Fresh overlap is
-not retried. After evidence review, an allowlisted operator may make a new existing manual call;
+stopped: wait until the inclusive database-time stale threshold is met and inspect sanitized
+state. Fresh overlap is not retried. After evidence review, an allowlisted operator may make a
+new existing manual call;
 it creates `trigger_type='manual'` and cannot select `retry` through body or headers. It is simply
 a later manual collection.
 
@@ -220,10 +287,19 @@ These are future specifications; Stage 5.2.0 runs no remote validation.
 | Concurrent overlap | One claim; other gets 409 and performs no provider work. |
 | Timeout/internal attempts | Three bounded provider attempts in one run; 120 s collector/140 s delivery bounds; no automatic path creates a retry run. |
 | Partial/total failure | Correct terminal status/counters and sanitized categories. |
-| Stale run without snapshots | At 15 minutes, exact conservative failed counters use zero snapshots before one atomic replacement. |
-| Stale run with snapshots | Recovery counts linked rows exactly and leaves immutable snapshots unchanged. |
+| Fresh stale boundary | At 14 minutes 59.999 seconds by database transaction time, the run is fresh and cannot be recovered. |
+| Inclusive stale boundary | At exactly 15 minutes and at more than 15 minutes by database transaction time, the run is stale and recovery-eligible. |
+| Caller time spoof | Header/body, scheduler time, and Edge runtime time cannot affect eligibility; predicates are rechecked after the parent lock. |
+| Running-parent snapshot batch | Canonical RPC locks the parent and succeeds or idempotently no-ops under `ON CONFLICT DO NOTHING`. |
+| Terminal-parent snapshot batch | RPC and trigger reject the complete batch atomically; no partial snapshot insert or raw database detail. |
+| Snapshot writer locks first | Recovery waits; after writer commit, every committed linked snapshot is included in the stale count. |
+| Recovery locks first | Late writer waits; recovery commits its count and terminal state, then the complete late batch is rejected against `failed`; recorded count equals linked rows at recovery commit. |
 | Concurrent stale recovery | One caller terminalizes and claims replacement; all others create no run/provider work. |
-| Failed stale terminalization | Forced conflict/failure/uncommitted update creates no replacement; later recovery remains possible. |
+| Failed stale transaction | Forced count/update/replacement failure rolls back everything; no replacement or provider collection. |
+| Multi-row terminal-parent batch | No partial insert when the parent is terminal or otherwise non-running. |
+| Existing snapshot conflicts | `ON CONFLICT DO NOTHING`; no immutable snapshot update. |
+| Post-recovery location deletion | Lawful cascade may remove linked snapshots without changing historical `snapshots_created`. |
+| Stale error sanitization | RPC/trigger/recovery responses and logs contain only reviewed categories/counters, never raw SQL/database details. |
 | No active locations | Successful scheduled zero-work run. |
 | RLS/immutability | Browser grants, user isolation, run denial, snapshot immutability unchanged. |
 | Bounded delivery evidence | Within retention, inspect `pg_net` response and corresponding durable scheduled run; cron SQL success alone is not Edge acceptance. |
@@ -277,7 +353,8 @@ observations, accuracy, real-data UI, geocoding, or unrelated work occurs in thi
 | Service role | Managed Edge runtime only; never scheduler/request. |
 | Trigger | machine=`scheduled`; operator=`manual`; Stage 5.2.1 implements no `trigger_type='retry'` writer or retry endpoint, and that schema value remains reserved. |
 | Cadence | `17 4 * * *`, 04:17 UTC; no catch-up; two-hour lateness. |
-| Single flight | Advisory-locked atomic claim + partial unique index; stale at 15 minutes; terminalize-and-replace in one transaction or create no replacement. |
+| Single flight / stale | Scheduler-wide advisory transaction lock + partial unique index; stale iff database transaction age is `>= interval '15 minutes'`; parent `FOR UPDATE`, exact count, terminalization, and replacement are one transaction or create no replacement. |
+| Snapshot write fence | Canonical batch RPC and `BEFORE INSERT` invariant trigger use parent `FOR NO KEY UPDATE` in the insertion transaction; only `running` parents accept immutable inserts. |
 | Attempts/timeouts | Provider 3 internal attempts; delivery 1/no automatic retry; collector 120 s; `pg_net` 140 s. |
 | Later operator invocation | New `manual` run after evidence review; immutable identity conflicts are no-ops; never labeled `retry`. |
 | Observability | Scheduled runs are durable acceptance truth; 04:17–06:17 UTC missing-acceptance check; `pg_net` result is ephemeral only. |
@@ -288,7 +365,8 @@ Before implementation:
 - [ ] Contract is merged to `main`; 5.2.1 has a separate bounded branch/PR.
 - [ ] Target is development; production is neither inferred nor authorized.
 - [ ] Official limits/features remain available on the target plan.
-- [ ] New migration/function design exactly implements claim, auth, deadline, and response rules
-      without widening browser grants/RLS.
+- [ ] New migration/function design exactly implements claim, inclusive stale eligibility,
+      parent-row snapshot fence, auth, deadline, and response rules without widening browser
+      grants/RLS.
 - [ ] Review material uses secret placeholders only.
 - [ ] Complete development matrix and disable verification are ready before enablement.
