@@ -25,9 +25,9 @@ deploy, invoke, or operate them.
 | 5.0 | Forecast contract and schema | Complete |
 | 5.1 | Manual forecast collector and development validation | Complete |
 | 5.1.1 | Authorized production rollout and validation | Complete |
-| 5.1.2 | Durable agent context, project status, and consolidated roadmap | Current |
-| **5.2.0** | **Scheduler Contract:** select the scheduling mechanism, authentication boundary, cadence/timezone semantics, overlap/idempotency behavior, failure handling, observability, rollout, and rollback gates. No scheduler is implemented in this stage. | **Next** |
-| 5.2.1 | Implement and validate scheduled forecast collection against the approved contract | Planned |
+| 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
+| 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
+| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Production configuration and enablement require separate explicit authorization.** | **Next** |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | Planned |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
 | 7.0 | Observation provider contract and immutable observation schema | Planned |
@@ -47,5 +47,6 @@ These items do not block the core weather pipeline and require separate bounded 
 - global geocoding (formerly Stage 4.2);
 - canonical places shared across users.
 
-This continuity stage does not implement scheduling, observations, accuracy, geocoding, or any
-other future product functionality.
+The scheduler contract is complete, but no scheduler has been implemented, configured, deployed,
+enabled, or invoked. Stage 5.2.1 remains subject to its development gate and separate production
+authorization. Observations, accuracy, geocoding, and other future functionality remain deferred.
