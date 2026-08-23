@@ -162,16 +162,16 @@ convention. Database-side enforcement is mandatory for every collector snapshot 
    `database_transaction_time - started_at >= interval '15 minutes'` using the transaction's
    database time. If age is below 15 minutes, create no run and return 409
    `scheduled_run_active`; caller-provided time cannot affect this result.
-4. While retaining the parent lock, calculate the exact linked-row count with
-   `SELECT COUNT(*) FROM public.forecast_snapshots WHERE forecast_run_id = stale_run_id`.
-5. Without releasing either lock, update the stale row to `status='failed'`, `completed_at` equal
+4. Without releasing either lock, update the stale row to `status='failed'`, `completed_at` equal
    to database transaction time, `locations_succeeded=0`,
-   `locations_failed=locations_total`, `snapshots_created` equal to that count, and fixed
-   `error_message='stale scheduled run recovered'`.
-6. In the same transaction, insert the replacement running scheduled claim. A partial unique
+   `locations_failed=locations_total`, and fixed
+   `error_message='stale scheduled run recovered'`. Stale recovery MUST preserve the run's
+   existing persisted `snapshots_created` value unchanged; its update MUST NOT assign that column.
+5. In the same transaction, insert the replacement running scheduled claim. A partial unique
    index permits at most one `running` row with `trigger_type='scheduled'`.
-7. Commit stale terminalization and replacement together. If selection, locking, recheck, count,
-   update, or replacement fails/conflicts, roll back the entire transaction: this attempt does not
+6. Commit stale terminalization and replacement together. Provider work begins only after this
+   commit succeeds. If selection, locking, recheck, update, replacement, or commit fails/conflicts,
+   roll back the entire transaction: this attempt does not
    terminalize the stale run, creates no replacement, starts no provider collection, and returns
    only a sanitized non-success category.
 
@@ -179,17 +179,21 @@ PostgreSQL defines `FOR UPDATE` and `FOR NO KEY UPDATE` as conflicting row locks
 transaction end. Therefore the required happens-before behavior is:
 
 - If a snapshot writer locks the parent first, recovery waits. After that batch commits or rolls
-  back, recovery acquires `FOR UPDATE`; its count includes every committed linked snapshot.
-- If recovery locks the parent first, a late snapshot writer waits. Recovery counts, terminalizes,
-  and commits; the writer then locks and checks the updated parent, sees `failed`, and its entire
-  batch is rejected.
+  back, recovery acquires `FOR UPDATE`, terminalizes without reconstructing
+  `snapshots_created`, and atomically commits the replacement. The counter retains its last
+  persisted value.
+- If recovery locks the parent first, a late snapshot writer waits. Recovery terminalizes and
+  commits the replacement; the writer then locks and checks the updated parent, sees `failed`,
+  and its entire batch is rejected. The preserved `snapshots_created` value is not changed.
 
-No snapshot can commit between the final count and stale terminalization or after terminalization
-for that run. The stale `snapshots_created` value is the exact linked-row count at stale-recovery
-transaction commit, protected from concurrent late collector inserts. It is not a promise of the
-linked-row count forever: a later lawful deletion of a user-owned location may cascade-delete its
-snapshot history under the data contract without rewriting the historical run counter. Recovery
-itself never updates or deletes immutable snapshots.
+No late collector snapshot can commit after terminalization for that run. This parent-row fence
+serializes collector snapshot inserts with stale terminalization; it is not intended to serialize
+user-owned location deletion. A deletion before or concurrent with recovery may lawfully
+cascade-delete snapshot rows. Recovery neither counts those rows nor waits on location deletion
+merely to reconstruct a counter, so the cascade does not affect its terminal counter update and
+the existing persisted `snapshots_created` remains unchanged. A location deletion after recovery
+may likewise reduce linked rows without rewriting the historical run counter. Recovery never
+updates or deletes immutable snapshots and never blocks or undoes lawful data erasure.
 
 The run owns single-flight state for its entire `running` lifetime; terminal status leaves the
 index predicate, so no lease cleanup exists. At most one concurrent caller can terminalize a stale
@@ -201,10 +205,25 @@ concurrent-claim loss returns 500 `stale_recovery_failed`; no database detail is
 Best-effort terminalization followed by replacement is forbidden.
 
 `locations_succeeded=0` is a conservative recovery classification because process loss prevents
-proof of which location operations completed provider-side. `snapshots_created` reports durable
-rows linked to the stale run at recovery commit; neither counter proves that no provider call occurred.
-Recovery never updates or deletes immutable snapshots and never deletes the stale run. The exact
-values satisfy existing run constraints: failed has zero succeeded locations, failed plus
+proof of which location operations completed provider-side. During normal collector completion,
+`snapshots_created` retains its existing meaning: the canonical insert result supplies the number
+of rows actually inserted by that run. For stale recovery, process completion data may have been
+lost before the normal terminal counter update. Current linked rows cannot reliably reconstruct
+historical rows created by the run: process loss may occur between snapshot insert and run-counter
+update, immutable identity conflicts can be successful no-ops, and later user-owned location
+deletion can cascade-delete snapshots.
+
+The preserved stale-run `snapshots_created` is therefore a conservative, last-persisted
+operational counter and may be lower than the rows originally inserted before process loss. It is
+not an exact current linked-row count or reconciliation result, and it proves neither that provider
+work did not occur nor that the stale run left no snapshot rows. Current immutable
+`public.forecast_snapshots` rows are authoritative for snapshot presence. Later cascade deletion
+does not rewrite the historical run counter. Richer reconciliation or stale-run health accounting,
+if needed, belongs to a separate reviewed Stage 5.3 design; Stage 5.2.0 adds no reconciliation
+table or schema.
+
+Recovery never updates or deletes immutable snapshots and never deletes the stale run. The
+terminal values satisfy existing run constraints: failed has zero succeeded locations, failed plus
 succeeded does not exceed total, terminal status has `completed_at`, and the fixed error is under
 1,000 characters and contains no identifiers, timestamps, raw errors, provider data, or secrets.
 
@@ -292,13 +311,17 @@ These are future specifications; Stage 5.2.0 runs no remote validation.
 | Caller time spoof | Header/body, scheduler time, and Edge runtime time cannot affect eligibility; predicates are rechecked after the parent lock. |
 | Running-parent snapshot batch | Canonical RPC locks the parent and succeeds or idempotently no-ops under `ON CONFLICT DO NOTHING`. |
 | Terminal-parent snapshot batch | RPC and trigger reject the complete batch atomically; no partial snapshot insert or raw database detail. |
-| Snapshot writer locks first | Recovery waits; after writer commit, every committed linked snapshot is included in the stale count. |
-| Recovery locks first | Late writer waits; recovery commits its count and terminal state, then the complete late batch is rejected against `failed`; recorded count equals linked rows at recovery commit. |
+| Stale zero snapshot counter | Recovery preserves an existing `snapshots_created=0`; its SQL/update does not assign the column. |
+| Stale non-zero snapshot counter | Recovery preserves an existing non-zero `snapshots_created` unchanged; it performs no linked-row reconstruction. |
+| Snapshot writer locks first | Recovery waits; after writer commit, recovery terminalizes while retaining the last persisted `snapshots_created`; no reconstructed-count assertion. |
+| Recovery locks first | Late writer waits; recovery preserves `snapshots_created`, commits terminal state and replacement, then the complete late batch is rejected against `failed`. |
 | Concurrent stale recovery | One caller terminalizes and claims replacement; all others create no run/provider work. |
-| Failed stale transaction | Forced count/update/replacement failure rolls back everything; no replacement or provider collection. |
+| Failed stale transaction | Forced update/replacement/commit failure rolls back everything; no replacement or provider collection. |
 | Multi-row terminal-parent batch | No partial insert when the parent is terminal or otherwise non-running. |
 | Existing snapshot conflicts | `ON CONFLICT DO NOTHING`; no immutable snapshot update. |
-| Post-recovery location deletion | Lawful cascade may remove linked snapshots without changing historical `snapshots_created`. |
+| Concurrent location deletion | Lawful cascade may remove snapshots without counter reconstruction or a location lock; stale recovery remains atomic and preserves historical `snapshots_created`. |
+| Post-recovery location deletion | Lawful cascade may reduce linked rows without changing historical `snapshots_created`. |
+| Stale snapshot immutability | No stale-recovery path updates or deletes snapshots. |
 | Stale error sanitization | RPC/trigger/recovery responses and logs contain only reviewed categories/counters, never raw SQL/database details. |
 | No active locations | Successful scheduled zero-work run. |
 | RLS/immutability | Browser grants, user isolation, run denial, snapshot immutability unchanged. |
@@ -353,7 +376,7 @@ observations, accuracy, real-data UI, geocoding, or unrelated work occurs in thi
 | Service role | Managed Edge runtime only; never scheduler/request. |
 | Trigger | machine=`scheduled`; operator=`manual`; Stage 5.2.1 implements no `trigger_type='retry'` writer or retry endpoint, and that schema value remains reserved. |
 | Cadence | `17 4 * * *`, 04:17 UTC; no catch-up; two-hour lateness. |
-| Single flight / stale | Scheduler-wide advisory transaction lock + partial unique index; stale iff database transaction age is `>= interval '15 minutes'`; parent `FOR UPDATE`, exact count, terminalization, and replacement are one transaction or create no replacement. |
+| Single flight / stale | Scheduler-wide advisory transaction lock + partial unique index; stale iff database transaction age is `>= interval '15 minutes'`; parent `FOR UPDATE`, counter-preserving terminalization, and replacement are one transaction or create no replacement. |
 | Snapshot write fence | Canonical batch RPC and `BEFORE INSERT` invariant trigger use parent `FOR NO KEY UPDATE` in the insertion transaction; only `running` parents accept immutable inserts. |
 | Attempts/timeouts | Provider 3 internal attempts; delivery 1/no automatic retry; collector 120 s; `pg_net` 140 s. |
 | Later operator invocation | New `manual` run after evidence review; immutable identity conflicts are no-ops; never labeled `retry`. |
