@@ -13,10 +13,21 @@ test("collector trust boundary remains outside frontend", () => {
   assert.doesNotMatch(frontend, /forecast_snapshots[\s\S]{0,100}\.(?:insert|upsert|update|delete)\(/);
 });
 
-test("stage 5.1 adds neither scheduler nor actual-weather schema", () => {
+test("scheduler implementation adds no actual-weather schema or repository secret", () => {
   const operationalFiles = [...files("supabase"), ...files(".github")].map((path) => readFileSync(path, "utf8")).join("\n");
   assert.doesNotMatch(operationalFiles, /create\s+table\s+(?:public\.)?weather_observations/i);
-  assert.doesNotMatch(operationalFiles, /(?:cron\.schedule|pg_cron)/i);
+  assert.doesNotMatch(operationalFiles, /FORECAST_SCHEDULER_TOKEN\s*=\s*['"][A-Za-z0-9_-]{20,}/);
+});
+
+test("scheduler uses database-enforced claim and snapshot write paths", () => {
+  const collector = readFileSync("supabase/functions/collect-forecasts/collector.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/202608230001_implement_forecast_scheduler.sql", "utf8");
+  assert.match(collector, /rpc\("claim_scheduled_forecast_run"/);
+  assert.match(collector, /rpc\("insert_forecast_snapshot_batch"/);
+  assert.doesNotMatch(collector, /from\("forecast_snapshots"\)\s*\.upsert/);
+  assert.match(migration, /for no key update/i);
+  assert.match(migration, /pg_advisory_xact_lock/i);
+  assert.match(migration, /interval '15 minutes'/i);
 });
 
 test("no credential-shaped literal is committed", () => {

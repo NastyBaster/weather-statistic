@@ -41,8 +41,12 @@ and the real-data dashboard remain deferred. Global geocoding is optional and de
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
 The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
-Stage 5.2.1 is next. The scheduler is not implemented or enabled, and production rollout still
-requires a separately confirmed target and explicit authorization.
+Stage 5.2.1 repository implementation is in progress: machine/manual authentication, strict
+request validation, database-enforced scheduled claiming/stale recovery, and the snapshot parent
+write fence are implemented for review. Remote development migration, deployment, secret
+provisioning, Cron enablement, and the development validation matrix remain pending. No scheduler
+is enabled. Production rollout still requires a separately confirmed target and explicit
+authorization.
 
 ## Working model
 
