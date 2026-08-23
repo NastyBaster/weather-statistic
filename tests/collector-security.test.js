@@ -23,11 +23,25 @@ test("scheduler uses database-enforced claim and snapshot write paths", () => {
   const collector = readFileSync("supabase/functions/collect-forecasts/collector.ts", "utf8");
   const migration = readFileSync("supabase/migrations/202608230001_implement_forecast_scheduler.sql", "utf8");
   assert.match(collector, /rpc\("claim_scheduled_forecast_run"/);
-  assert.match(collector, /rpc\("insert_forecast_snapshot_batch"/);
+  assert.match(collector, /rpc\(\s*"insert_forecast_snapshot_batch"/);
   assert.doesNotMatch(collector, /from\("forecast_snapshots"\)\s*\.upsert/);
   assert.match(migration, /for no key update/i);
   assert.match(migration, /pg_advisory_xact_lock/i);
   assert.match(migration, /interval '15 minutes'/i);
+});
+
+test("collector fences terminal updates and applies the overall deadline", () => {
+  const collector = readFileSync("supabase/functions/collect-forecasts/collector.ts", "utf8");
+  assert.match(
+    collector,
+    /\.eq\("id", runId\)[\s\S]{0,100}\.eq\("status", "running"\)[\s\S]{0,100}\.select\("id"\)/,
+  );
+  assert.match(collector, /completedRuns\?\.length !== 1/);
+  assert.match(
+    collector,
+    /const deadlineTimer = setTimeout\(\(\) => deadline\.abort\(\), 120_000\)/,
+  );
+  assert.match(collector, /\.abortSignal\(deadline\.signal\)/);
 });
 
 test("no credential-shaped literal is committed", () => {

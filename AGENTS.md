@@ -1,5 +1,9 @@
 # Repository agent guidance
 
+## Communication
+
+- Communicate with the user in Ukrainian or English.
+
 ## Project and environments
 
 - Forecast Reality Check is an educational, non-commercial project.

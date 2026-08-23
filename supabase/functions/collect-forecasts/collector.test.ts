@@ -11,6 +11,7 @@ import {
 import { withRetry } from "./retry.ts";
 import { localDate } from "./time.ts";
 import { ProviderError } from "./types.ts";
+import { collectionHttpStatus } from "./index.ts";
 
 // Test mutations intentionally exercise malformed external JSON.
 // deno-lint-ignore no-explicit-any
@@ -332,6 +333,12 @@ Deno.test("terminal status covers no work, complete, mixed, and failed", () => {
   assertEquals(terminalStatus(4, 0), "succeeded");
   assertEquals(terminalStatus(3, 1), "partial");
   assertEquals(terminalStatus(0, 4), "failed");
+});
+
+Deno.test("total failure maps to HTTP 500", () => {
+  assertEquals(collectionHttpStatus("succeeded"), 200);
+  assertEquals(collectionHttpStatus("partial"), 200);
+  assertEquals(collectionHttpStatus("failed"), 500);
 });
 
 Deno.test(

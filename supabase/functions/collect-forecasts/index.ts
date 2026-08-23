@@ -10,6 +10,8 @@ const json = (body: unknown, status = 200) =>
       "cache-control": "no-store",
     },
   });
+export const collectionHttpStatus = (status: string) =>
+  status === "failed" ? 500 : 200;
 export async function handler(request: Request, env = Deno.env) {
   if (request.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405);
@@ -61,7 +63,7 @@ export async function handler(request: Request, env = Deno.env) {
     if (result === "scheduled_run_active") {
       return json({ error: result }, 409);
     }
-    return json(result);
+    return json(result, collectionHttpStatus(result.status));
   } catch {
     return json({ error: "collection_failed" }, 500);
   }

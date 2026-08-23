@@ -69,32 +69,36 @@ export async function collect(
   provider = fetchForecast,
   triggerType: "manual" | "scheduled" = "manual",
 ) {
-  const startedAt = now().toISOString();
-  const { data, error: locationError } = await db
-    .from("locations")
-    .select("id,latitude,longitude,timezone")
-    .eq("is_active", true);
-  if (locationError) throw new Error("active locations could not be read");
-  const locations = (data ?? []) as Location[];
-  const claim = triggerType === "scheduled"
-    ? await db.rpc("claim_scheduled_forecast_run", {
-      requested_locations_total: locations.length,
-    })
-    : await db.from("forecast_runs").insert({
-      trigger_type: "manual",
-      status: "running",
-      started_at: startedAt,
-      locations_total: locations.length,
-    }).select("id").single();
-  const run = triggerType === "scheduled" ? claim.data?.[0] : claim.data;
-  const runError = claim.error;
-  if (triggerType === "scheduled" && run?.result === "scheduled_run_active") {
-    return "scheduled_run_active" as const;
-  }
-  if (runError || !run) throw new Error("forecast run could not be created");
-  const runId = triggerType === "scheduled" ? run.run_id : run.id;
   const deadline = new AbortController();
   const deadlineTimer = setTimeout(() => deadline.abort(), 120_000);
+  const startedAt = now().toISOString();
+  try {
+    const { data, error: locationError } = await db
+      .from("locations")
+      .select("id,latitude,longitude,timezone")
+      .eq("is_active", true)
+      .abortSignal(deadline.signal);
+    if (locationError) throw new Error("active locations could not be read");
+    const locations = (data ?? []) as Location[];
+    const claim = triggerType === "scheduled"
+      ? await db.rpc("claim_scheduled_forecast_run", {
+        requested_locations_total: locations.length,
+      }).abortSignal(deadline.signal)
+      : await db.from("forecast_runs").insert({
+        trigger_type: "manual",
+        status: "running",
+        started_at: startedAt,
+        locations_total: locations.length,
+      }).select("id").single().abortSignal(deadline.signal);
+    const run = triggerType === "scheduled" ? claim.data?.[0] : claim.data;
+    const runError = claim.error;
+    if (
+      triggerType === "scheduled" && run?.result === "scheduled_run_active"
+    ) {
+      return "scheduled_run_active" as const;
+    }
+    if (runError || !run) throw new Error("forecast run could not be created");
+    const runId = triggerType === "scheduled" ? run.run_id : run.id;
   let succeeded = 0,
     failed = 0,
     snapshots = 0;
@@ -105,7 +109,9 @@ export async function collect(
       4,
       async (group) => {
         try {
-          if (deadline.signal.aborted) throw new ProviderError("timeout", false);
+          if (deadline.signal.aborted) {
+            throw new ProviderError("timeout", false);
+          }
           const response = await withRetry(
             (signal) =>
               provider(
@@ -133,10 +139,13 @@ export async function collect(
               weather_code: day.weatherCode,
             }))
           );
-          const { data, error } = await db.rpc("insert_forecast_snapshot_batch", {
-            requested_run_id: runId,
-            requested_rows: rows,
-          });
+          const { data, error } = await db.rpc(
+            "insert_forecast_snapshot_batch",
+            {
+              requested_run_id: runId,
+              requested_rows: rows,
+            },
+          ).abortSignal(deadline.signal);
           if (error) throw new Error("snapshot insert failed");
           return {
             succeeded: group.locations.length,
@@ -164,7 +173,6 @@ export async function collect(
     succeeded = 0;
     errors.push("collector");
   }
-  clearTimeout(deadlineTimer);
   const status = terminalStatus(succeeded, failed),
     completedAt = now().toISOString();
   const message = failed
@@ -175,7 +183,7 @@ export async function collect(
       1000,
     )
     : null;
-  const { error: completionError } = await db
+  const { data: completedRuns, error: completionError } = await db
     .from("forecast_runs")
     .update({
       status,
@@ -185,8 +193,13 @@ export async function collect(
       snapshots_created: snapshots,
       error_message: message,
     })
-    .eq("id", runId);
-  if (completionError) throw new Error("forecast run terminal update failed");
+    .eq("id", runId)
+    .eq("status", "running")
+    .select("id")
+    .abortSignal(deadline.signal);
+  if (completionError || completedRuns?.length !== 1) {
+    throw new Error("forecast run terminal update failed");
+  }
   return {
     runId,
     status,
@@ -203,5 +216,8 @@ export async function collect(
         } could not be collected`,
       }
       : {}),
-  };
+    };
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
 }
