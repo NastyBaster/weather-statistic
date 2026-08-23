@@ -19,10 +19,12 @@ Validation was performed on 2026-08-23 with two short-lived production user sess
 
 The user access tokens were held only in inherited process memory for the grouped checks, then cleared. They were not printed, decoded, persisted, logged, or added to repository files. No temporary validation script was written.
 
-## Remaining operational review
+## Production log review
 
-The installed Supabase CLI cannot retrieve Edge Function logs, so the following review is Dashboard-only: open production Edge Function logs for `collect-forecasts`, restrict the time range to the two manual invocation windows, and verify that entries contain no JWT or service-role credential, email address, request headers, raw provider body, stack trace, or full request/provider URL. Do not copy full log entries into an issue or pull request; record only the sanitized pass/fail result.
+The production Supabase Dashboard logs for `collect-forecasts` were manually reviewed and passed. The Dashboard displayed timestamps in local UTC+3 time. Review was restricted to the two authorized invocation windows: `2026-08-22T13:57:45Z` (booted at approximately 16:57:45 local time, followed by shutdown) and `2026-08-22T14:05:49Z` (booted at approximately 17:05:49 local time, followed by shutdown).
+
+The entries contained only acceptable runtime lifecycle metadata such as boot, shutdown, and boot duration. The review found no JWT, Authorization header, service-role key, `FORECAST_ADMIN_USER_IDS` value, email, user UUID, raw Open-Meteo response body, stack trace, database connection string, full database error, or provider secret. No full log entries were copied or exported. Project references, execution IDs, tokens, secret digests, and other identifying or secret values remain omitted from this record.
 
 ## Rollout status
 
-The production manual collector is deployed and its data, idempotency, immutability, and RLS boundaries are validated. Invocation remains manual-only. Scheduling is deferred. The current UI continues to use demonstration data; observations, accuracy calculations, and real-data presentation remain deferred.
+The production manual collector is deployed, its data, idempotency, immutability, and RLS boundaries are validated, and its production log review passed. Invocation remains manual-only. Scheduling is deferred. The current UI continues to use demonstration data; observations, accuracy calculations, and real-data presentation remain deferred.
