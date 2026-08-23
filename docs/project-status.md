@@ -17,6 +17,8 @@ procedures and raw evidence out of this file.
 | 5.0 | Forecast provider/data contract and schema | Complete |
 | 5.1 | Manual forecast collector and development runtime validation | Complete |
 | 5.1.1 | Production collector rollout and sanitized validation | Complete |
+| 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
+| 5.2.0 | Forecast scheduler contract | Complete |
 
 Google OAuth is configured and working in development and production.
 
@@ -35,6 +37,12 @@ There is no scheduler and no production UI trigger. Personal locations are real,
 and history remain intentionally demonstrative; production snapshots are not displayed. Never
 mix demo and real data without an explicit, visible boundary. Observations, accuracy calculations,
 and the real-data dashboard remain deferred. Global geocoding is optional and deferred.
+
+Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
+stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
+The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
+Stage 5.2.1 is next. The scheduler is not implemented or enabled, and production rollout still
+requires a separately confirmed target and explicit authorization.
 
 ## Working model
 
