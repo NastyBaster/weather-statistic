@@ -73,14 +73,15 @@ service-role key remains only in managed Edge runtime and never enters Vault or 
 ## 5. Request and run contract
 
 - `POST /functions/v1/collect-forecasts`; other methods return 405.
-- One Bearer credential, `Content-Type: application/json`, and for schedule a non-secret
-  `X-Scheduler-Slot` containing the canonical scheduled UTC instant.
+- One Bearer credential and `Content-Type: application/json`; no custom scheduler slot,
+  timestamp, trigger, identity, or correlation header is sent.
 - Body is exactly `{}`. Invalid JSON, any key, array/scalar, or oversized body returns 400 before
-  run creation. Slot/body cannot spoof identity or trigger.
-- Machine creates `scheduled`; preserved operator creates `manual`. A separately reviewed
-  operator retry mode, if later included, creates `retry` and cannot be body-selected. Until then,
-  operational operator replays remain truthfully `manual`.
-- Provider attempts stay inside one run.
+  run creation. Any custom header purporting to select identity or trigger also returns 400 before
+  run creation.
+- Machine authentication creates `scheduled`; preserved allowlisted operator authentication
+  creates `manual`. Stage 5.2.1 implements no writer or HTTP surface for `trigger_type='retry'`.
+  That schema value is reserved for a separate future reviewed contract/stage.
+- Internal provider attempts stay inside one run and never create another run.
 - Success and partial return 200 with status/sanitized counters; total failure 500; auth 401/403;
   invalid body 400; method 405; fresh overlap 409. No sensitive detail or identifiers.
 - `pg_net.timeout_milliseconds` is **140,000 ms**. Collector overall deadline is **120,000 ms**:
@@ -94,32 +95,58 @@ Run daily at **`17 4 * * *` = 04:17 UTC**. Database and cron stay UTC; minute 17
 top-of-hour load. This is 07:17 Kyiv in EEST and 06:17 in EET, within the accepted 06:00–08:00
 window. DST changes neither the UTC instant nor invocation count.
 
-There is no automatic catch-up. Up to two hours late is acceptable; later absence is reviewed
-before a deliberate operator replay. Daily collection is far below current published Open-Meteo
-non-commercial limits for the small location set and its eight forecast days retain horizons
-0–7. Increasing cadence requires a new provider/capacity review.
+There is no automatic catch-up. The acceptance window starts at 04:17 UTC and ends at
+**06:17 UTC**, so a scheduled run whose server-generated `started_at` falls within that interval
+is acceptably late. If no such run exists after 06:17 UTC, record a **missing scheduled
+acceptance** (a missed or unaccepted delivery), without claiming a particular HTTP failure.
+After reviewing the available sanitized evidence, an allowlisted operator may invoke the existing
+manual collector; that is a new `manual` collection, not a retry run. Daily collection is far
+below current published Open-Meteo non-commercial limits for the small location set and its eight
+forecast days retain horizons 0–7. Increasing cadence requires a new provider/capacity review.
 
 Scheduler timezone never changes location timezone semantics: `collection_date` is derived from
 `collected_at` in each stored IANA timezone and `target_date` remains provider location-local.
 
 ## 7. Overlap, idempotency, and concurrency
 
-Stage 5.2.1 adds, in a new migration, an atomic database claim operation and invariant:
+Stage 5.2.1 adds, in a new migration, an atomic database claim operation and invariant. Eligibility
+for stale recovery is exactly `trigger_type='scheduled'`, `status='running'`, and `started_at`
+older than 15 minutes according to database/server time; caller-provided time is never used.
 
 1. Under a transaction advisory lock with a fixed documented application key, inspect running
    scheduled runs.
 2. If one is younger than **15 minutes**, create no run and return 409
    `scheduled_run_active`.
-3. If at least 15 minutes old, terminalize it as `failed` with `completed_at` and sanitized
-   `stale_timeout`, then create the replacement scheduled run.
-4. A partial unique index permits at most one `running` row with `trigger_type='scheduled'`.
+3. If one is stale, calculate the exact count of existing `forecast_snapshots` rows referencing
+   it, then update it to `status='failed'`, `completed_at` equal to database transaction time,
+   `locations_succeeded=0`, `locations_failed=locations_total`, `snapshots_created` equal to that
+   calculated count, and fixed `error_message='stale scheduled run recovered'`.
+4. Only after that terminal update succeeds in the same atomic database operation may the
+   replacement scheduled run be inserted. The stale update and replacement claim commit together.
+5. A partial unique index permits at most one `running` row with `trigger_type='scheduled'`.
 
 The run owns single-flight state for its entire `running` lifetime; terminal status leaves the
-index predicate, so no lease cleanup exists. Fresh skips have no run row; cron/HTTP 409 records
-delivery. Stale runs remain failed evidence. Duplicate delivery after terminal creates a new run,
-but snapshot uniqueness makes existing identities immutable no-ops. Snapshot idempotency alone
-is insufficient: overlap would duplicate provider traffic, contend on writes, distort counters,
-and complicate recovery. Manual break-glass runs remain possible but must not be routine.
+index predicate, so no lease cleanup exists. At most one concurrent caller can terminalize a stale
+run and receive the replacement claim; all others create no run, perform no provider work, and
+receive 409 `scheduled_run_active`. There is no transient two-replacement window.
+If stale terminalization conflicts, fails, or does not commit, no replacement is created; a later
+bounded invocation or operator review may try recovery again. A database failure that is not a
+concurrent-claim loss returns 500 `stale_recovery_failed`; no database detail is returned.
+Best-effort terminalization followed by replacement is forbidden.
+
+`locations_succeeded=0` is a conservative recovery classification because process loss prevents
+proof of which location operations completed provider-side. `snapshots_created` reports durable
+rows actually linked to the stale run; neither counter proves that no provider call occurred.
+Recovery never updates or deletes immutable snapshots and never deletes the stale run. The exact
+values satisfy existing run constraints: failed has zero succeeded locations, failed plus
+succeeded does not exceed total, terminal status has `completed_at`, and the fixed error is under
+1,000 characters and contains no identifiers, timestamps, raw errors, provider data, or secrets.
+
+Fresh skips have no run row. Stale runs remain failed evidence. Duplicate delivery after a
+terminal run creates a new scheduled run, but snapshot uniqueness makes existing identities
+immutable no-ops. Snapshot idempotency alone is insufficient: overlap would duplicate provider
+traffic, contend on writes, distort counters, and complicate recovery. Manual break-glass runs
+remain possible but must not be routine.
 
 ## 8. Failure and retry contract
 
@@ -127,26 +154,49 @@ Provider retries remain three attempts per group, 10-second attempt timeout, cap
 backoff/jitter and capped `Retry-After`. Timeout/network/429/5xx/temporary unavailability retry;
 invalid input/request, auth, provider/schema contract, and normalized validation do not.
 
-Cron submits **one delivery per slot and has no automatic delivery retry**. A timeout does not
-prove execution stopped: wait through the 15-minute stale threshold and inspect sanitized state.
-Fresh overlap is not retried. A distinct operational retry is deliberate and, only if an explicit
-reviewed retry mode exists, creates `retry`; adapter attempts never do. Partial/failed runs remain
-terminal, stale `running` rows are recovered through the claim, and nothing automatically deletes
-or rewrites historical data.
+Cron submits **exactly one automatic delivery attempt per daily slot and performs no automatic
+retry**. A missed or failed delivery creates no automatic run. A timeout does not prove execution
+stopped: wait through the 15-minute stale threshold and inspect sanitized state. Fresh overlap is
+not retried. After evidence review, an allowlisted operator may make a new existing manual call;
+it creates `trigger_type='manual'` and cannot select `retry` through body or headers. It is simply
+a later manual collection.
+
+`trigger_type='retry'` remains a reserved schema value. Stage 5.2.1 creates no retry endpoint or
+retry writer, and neither its scheduled nor manual request can select it. Future use requires a
+separate explicit reviewed retry contract/stage. Partial/failed runs remain terminal, stale
+`running` rows are recovered through the atomic claim, and no failure path deletes or rewrites
+historical data or automatically creates a retry run.
 
 ## 9. Observability and sanitized evidence
 
-Stage 5.2.1 supplies a concise query/checklist for:
+The durable source of truth for an accepted invocation is `public.forecast_runs` with
+`trigger_type='scheduled'`. Stage 5.2.1 supplies a concise query/checklist for these durable facts:
 
-- latest attempted delivery time and HTTP category from cron/`pg_net` metadata;
-- latest terminal scheduled time/status and succeeded/partial/failed counts;
-- scheduled running count/age bucket, flagging 15 minutes;
-- aggregate location and `snapshots_created` counters;
-- cron active state and last delivery category.
+- latest accepted scheduled run and its server-generated `started_at`;
+- latest terminal scheduled run, `completed_at`, status, and succeeded/partial/failed counts;
+- scheduled running count and age bucket, flagging 15 minutes;
+- sanitized aggregate location and `snapshots_created` counters;
+- absence of an accepted scheduled run in the expected daily 04:17–06:17 UTC window.
 
-Review immediately for 401/403, timeout, stale/failed run, two consecutive partials, no terminal
-run by 06:17 UTC, or unexpected delivery count. `X-Scheduler-Slot` and UTC time windows correlate
-systems without run/request/user IDs. Full Stage 5.3 alerting is deferred.
+After 06:17 UTC, absence of a scheduled run in that window is reported as **missing scheduled
+acceptance** or **missed or unaccepted delivery**. It is not evidence of a specific transport,
+authentication, gateway, or function failure.
+
+`pg_net` HTTP responses are ephemeral and, by default, are retained for substantially less than
+the daily cadence. Inspect response status and the infrastructure-generated `pg_net` request ID
+only during a bounded development/production rollout observation or incident review that is
+known to be within documented retention. The request ID is not an authentication input, durable
+application identifier, custom header, continuity datum, or secret. A `cron.job_run_details`
+record may prove the SQL cron job executed, but neither SQL success nor a `pg_net` request ID proves
+that the Edge Function accepted or completed the request. Ephemeral transport data is never the
+only health signal and is not guaranteed to survive until the next daily cadence.
+
+Stage 5.2.1 adds no durable scheduler-delivery ledger solely for HTTP results. A durable delivery
+ledger, automated alert transport, or richer operational monitoring remains Stage 5.3 and needs
+a separate reviewed design. Review immediately for ephemeral 401/403 or timeout evidence, a stale
+or failed run, two consecutive partials, missing scheduled acceptance, or unexpected accepted-run
+count. Correlation uses the durable scheduled run, its server-generated times, the canonical
+cadence/window, and bounded cron/`pg_net` rollout observation—never a caller-controlled header.
 
 Never expose in logs/evidence: JWTs, Authorization headers, scheduler secrets, service-role keys,
 secret digests, user UUIDs, project references, emails, provider bodies, full database errors,
@@ -162,14 +212,22 @@ These are future specifications; Stage 5.2.0 runs no remote validation.
 | Authenticated non-admin | 403; no run. |
 | Allowlisted manual operator | Existing behavior; exactly one `manual` run. |
 | Valid scheduled call | Accepted; exactly one `scheduled` run. |
-| Spoof body/identity | Every non-empty body rejected 400; auth alone derives trigger. |
+| Spoof body/identity/trigger | Every non-empty body rejected 400; headers cannot select identity, `manual`, `scheduled`, or `retry`; auth alone derives trigger. |
+| Manual request selects retry | Body or custom trigger header is rejected 400 before run creation; an allowlisted user can create only `manual`. |
+| Scheduled request selects retry | Body or custom trigger header is rejected 400 before run creation; machine authentication can create only `scheduled`. |
+| Repeated allowlisted operator call | Creates a new `manual` run; no request surface can select `retry`. |
 | Duplicate after terminal | New run; existing identities unchanged; only missing snapshots counted. |
 | Concurrent overlap | One claim; other gets 409 and performs no provider work. |
-| Timeout/retry | Three bounded provider attempts; 120 s collector/140 s delivery bounds. |
+| Timeout/internal attempts | Three bounded provider attempts in one run; 120 s collector/140 s delivery bounds; no automatic path creates a retry run. |
 | Partial/total failure | Correct terminal status/counters and sanitized categories. |
-| Stale run | At 15 minutes old becomes failed before exactly one replacement; younger blocks. |
+| Stale run without snapshots | At 15 minutes, exact conservative failed counters use zero snapshots before one atomic replacement. |
+| Stale run with snapshots | Recovery counts linked rows exactly and leaves immutable snapshots unchanged. |
+| Concurrent stale recovery | One caller terminalizes and claims replacement; all others create no run/provider work. |
+| Failed stale terminalization | Forced conflict/failure/uncommitted update creates no replacement; later recovery remains possible. |
 | No active locations | Successful scheduled zero-work run. |
 | RLS/immutability | Browser grants, user isolation, run denial, snapshot immutability unchanged. |
+| Bounded delivery evidence | Within retention, inspect `pg_net` response and corresponding durable scheduled run; cron SQL success alone is not Edge acceptance. |
+| Missing acceptance | After 06:17 UTC with no scheduled run in the window, report missing scheduled acceptance without inventing an HTTP cause. |
 | Sanitized review | Prohibited material absent from response/log/evidence. |
 | Disable | Development job inactive/unscheduled and no later delivery. |
 
@@ -187,7 +245,8 @@ Roadmap or merged contract is not production authorization. Production requires:
 - sanitized evidence checklist;
 - named disable action: Cron Dashboard Disable, or `cron.unschedule(<reviewed job name>)` after
   target verification, with no identifier embedded here;
-- observation from first delivery through terminal state and a second-day confirmation;
+- bounded observation of the first ephemeral `pg_net` response and corresponding durable
+  scheduled run through terminal state, plus second-day durable acceptance confirmation;
 - stop on wrong target/revision, auth denial, timeout/stale, active duplicate, secret exposure,
   unsanitized logs, RLS/immutability regression, failed, or unexplained partial result.
 
@@ -198,7 +257,8 @@ plus two-hour lateness. Preserve all runs/snapshots; delete nothing. If compromi
 replace both Vault and Edge credential copies, prove the old value gets 401 without logging it,
 and re-enable only after approved development validation. Function rollback applies only if
 5.2.1 changed it and requires a separately authorized deployment. Evidence is limited to active
-state, UTC buckets, response categories, terminal counts, and absence of later scheduled runs.
+state, durable accepted-run UTC windows and terminal counts, plus ephemeral response categories
+only when inspected within documented retention, and absence of later scheduled runs.
 
 ## 13. Explicit non-goals
 
@@ -215,12 +275,12 @@ observations, accuracy, real-data UI, geocoding, or unrelated work occurs in thi
 | Machine auth | 256-bit random base64url opaque Bearer, only Vault + Edge secret, constant-time validation. |
 | Manual auth | Existing user JWT + `FORECAST_ADMIN_USER_IDS`. |
 | Service role | Managed Edge runtime only; never scheduler/request. |
-| Trigger | machine=`scheduled`; operator=`manual`; explicit future operator retry=`retry`. |
+| Trigger | machine=`scheduled`; operator=`manual`; Stage 5.2.1 implements no `trigger_type='retry'` writer or retry endpoint, and that schema value remains reserved. |
 | Cadence | `17 4 * * *`, 04:17 UTC; no catch-up; two-hour lateness. |
-| Single flight | Advisory-locked atomic claim + partial unique index; stale at 15 minutes; overlap 409/no run. |
-| Retries/timeouts | Provider 3 attempts; delivery 1; collector 120 s; `pg_net` 140 s. |
-| Replay | New run after terminal; immutable identity conflicts are no-ops. |
-| Observability | Delivery category, terminal counters, stale age, UTC slot; no sensitive IDs. |
+| Single flight | Advisory-locked atomic claim + partial unique index; stale at 15 minutes; terminalize-and-replace in one transaction or create no replacement. |
+| Attempts/timeouts | Provider 3 internal attempts; delivery 1/no automatic retry; collector 120 s; `pg_net` 140 s. |
+| Later operator invocation | New `manual` run after evidence review; immutable identity conflicts are no-ops; never labeled `retry`. |
+| Observability | Scheduled runs are durable acceptance truth; 04:17–06:17 UTC missing-acceptance check; `pg_net` result is ephemeral only. |
 | Rollback | Disable first, preserve data, rotate both copies if compromised. |
 
 Before implementation:
