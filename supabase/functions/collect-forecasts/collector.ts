@@ -72,33 +72,37 @@ export async function collect(
   const deadline = new AbortController();
   const deadlineTimer = setTimeout(() => deadline.abort(), 120_000);
   const startedAt = now().toISOString();
-  try {
-    const { data, error: locationError } = await db
-      .from("locations")
-      .select("id,latitude,longitude,timezone")
-      .eq("is_active", true)
-      .abortSignal(deadline.signal);
-    if (locationError) throw new Error("active locations could not be read");
-    const locations = (data ?? []) as Location[];
-    const claim = triggerType === "scheduled"
-      ? await db.rpc("claim_scheduled_forecast_run", {
-        requested_locations_total: locations.length,
-      }).abortSignal(deadline.signal)
-      : await db.from("forecast_runs").insert({
-        trigger_type: "manual",
-        status: "running",
-        started_at: startedAt,
-        locations_total: locations.length,
-      }).select("id").single().abortSignal(deadline.signal);
-    const run = triggerType === "scheduled" ? claim.data?.[0] : claim.data;
-    const runError = claim.error;
-    if (
-      triggerType === "scheduled" && run?.result === "scheduled_run_active"
-    ) {
-      return "scheduled_run_active" as const;
-    }
-    if (runError || !run) throw new Error("forecast run could not be created");
-    const runId = triggerType === "scheduled" ? run.run_id : run.id;
+  const { data, error: locationError } = await db
+    .from("locations")
+    .select("id,latitude,longitude,timezone")
+    .eq("is_active", true)
+    .abortSignal(deadline.signal);
+  if (locationError) {
+    clearTimeout(deadlineTimer);
+    throw new Error("active locations could not be read");
+  }
+  const locations = (data ?? []) as Location[];
+  const claim = triggerType === "scheduled"
+    ? await db.rpc("claim_scheduled_forecast_run", {
+      requested_locations_total: locations.length,
+    }).abortSignal(deadline.signal)
+    : await db.from("forecast_runs").insert({
+      trigger_type: "manual",
+      status: "running",
+      started_at: startedAt,
+      locations_total: locations.length,
+    }).select("id").single().abortSignal(deadline.signal);
+  const run = triggerType === "scheduled" ? claim.data?.[0] : claim.data;
+  const runError = claim.error;
+  if (triggerType === "scheduled" && run?.result === "scheduled_run_active") {
+    clearTimeout(deadlineTimer);
+    return "scheduled_run_active" as const;
+  }
+  if (runError || !run) {
+    clearTimeout(deadlineTimer);
+    throw new Error("forecast run could not be created");
+  }
+  const runId = triggerType === "scheduled" ? run.run_id : run.id;
   let succeeded = 0,
     failed = 0,
     snapshots = 0;
@@ -197,6 +201,7 @@ export async function collect(
     .eq("status", "running")
     .select("id")
     .abortSignal(deadline.signal);
+  clearTimeout(deadlineTimer);
   if (completionError || completedRuns?.length !== 1) {
     throw new Error("forecast run terminal update failed");
   }
@@ -216,8 +221,5 @@ export async function collect(
         } could not be collected`,
       }
       : {}),
-    };
-  } finally {
-    clearTimeout(deadlineTimer);
-  }
+  };
 }
