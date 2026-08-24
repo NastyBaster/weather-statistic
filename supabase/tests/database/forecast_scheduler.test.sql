@@ -1,6 +1,6 @@
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(21);
+select extensions.plan(59);
 
 select gen_random_uuid() as test_user_id \gset
 select gen_random_uuid() as test_location_id \gset
@@ -177,18 +177,98 @@ select extensions.throws_ok(
   'snapshots remain immutable'
 );
 
-select extensions.function_privs_are(
-  'public', 'finalize_forecast_run',
-  array['uuid', 'text', 'integer', 'integer', 'integer', 'text'],
-  'service_role', array['EXECUTE'],
-  'service role alone can execute finalize RPC'
+select extensions.ok(
+  to_regprocedure('public.insert_forecast_snapshot_batch(uuid,jsonb)') is not null,
+  'batch snapshot RPC exists'
 );
-select extensions.function_privs_are(
-  'public', 'finalize_forecast_run',
-  array['uuid', 'text', 'integer', 'integer', 'integer', 'text'],
-  'authenticated', array[]::text[],
-  'authenticated users cannot finalize runs'
+select extensions.ok(
+  has_function_privilege('service_role', 'public.insert_forecast_snapshot_batch(uuid,jsonb)', 'execute'),
+  'service role can execute batch snapshot RPC'
 );
+select extensions.ok(
+  not has_function_privilege('anon', 'public.insert_forecast_snapshot_batch(uuid,jsonb)', 'execute'),
+  'anon cannot execute batch snapshot RPC'
+);
+select extensions.ok(
+  not has_function_privilege('authenticated', 'public.insert_forecast_snapshot_batch(uuid,jsonb)', 'execute'),
+  'authenticated cannot execute batch snapshot RPC'
+);
+select extensions.ok(
+  not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.insert_forecast_snapshot_batch(uuid,jsonb)'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'),
+  'PUBLIC cannot execute batch snapshot RPC'
+);
+
+select extensions.ok(
+  to_regprocedure('public.claim_scheduled_forecast_run(integer)') is not null,
+  'scheduled claim RPC exists'
+);
+select extensions.ok(
+  has_function_privilege('service_role', 'public.claim_scheduled_forecast_run(integer)', 'execute'),
+  'service role can execute scheduled claim RPC'
+);
+select extensions.ok(
+  not has_function_privilege('anon', 'public.claim_scheduled_forecast_run(integer)', 'execute'),
+  'anon cannot execute scheduled claim RPC'
+);
+select extensions.ok(
+  not has_function_privilege('authenticated', 'public.claim_scheduled_forecast_run(integer)', 'execute'),
+  'authenticated cannot execute scheduled claim RPC'
+);
+select extensions.ok(
+  not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.claim_scheduled_forecast_run(integer)'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'),
+  'PUBLIC cannot execute scheduled claim RPC'
+);
+
+select extensions.ok(
+  to_regprocedure('public.finalize_forecast_run(uuid,text,integer,integer,integer,text)') is not null,
+  'finalize RPC exists'
+);
+select extensions.ok(
+  has_function_privilege('service_role', 'public.finalize_forecast_run(uuid,text,integer,integer,integer,text)', 'execute'),
+  'service role can execute finalize RPC'
+);
+select extensions.ok(
+  not has_function_privilege('anon', 'public.finalize_forecast_run(uuid,text,integer,integer,integer,text)', 'execute'),
+  'anon cannot execute finalize RPC'
+);
+select extensions.ok(
+  not has_function_privilege('authenticated', 'public.finalize_forecast_run(uuid,text,integer,integer,integer,text)', 'execute'),
+  'authenticated cannot execute finalize RPC'
+);
+select extensions.ok(
+  not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.finalize_forecast_run(uuid,text,integer,integer,integer,text)'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'),
+  'PUBLIC cannot execute finalize RPC'
+);
+
+select extensions.ok(to_regprocedure('public.guard_forecast_snapshot_parent_running()') is not null, 'parent-running guard exists');
+select extensions.ok(not has_function_privilege('service_role', 'public.guard_forecast_snapshot_parent_running()', 'execute'), 'service role cannot directly execute parent-running guard');
+select extensions.ok(not has_function_privilege('anon', 'public.guard_forecast_snapshot_parent_running()', 'execute'), 'anon cannot directly execute parent-running guard');
+select extensions.ok(not has_function_privilege('authenticated', 'public.guard_forecast_snapshot_parent_running()', 'execute'), 'authenticated cannot directly execute parent-running guard');
+select extensions.ok(not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.guard_forecast_snapshot_parent_running()'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), 'PUBLIC cannot directly execute parent-running guard');
+
+select extensions.ok(to_regprocedure('public.reject_forecast_snapshot_update()') is not null, 'snapshot update-rejection helper exists');
+select extensions.ok(not has_function_privilege('service_role', 'public.reject_forecast_snapshot_update()', 'execute'), 'service role cannot directly execute snapshot update-rejection helper');
+select extensions.ok(not has_function_privilege('anon', 'public.reject_forecast_snapshot_update()', 'execute'), 'anon cannot directly execute snapshot update-rejection helper');
+select extensions.ok(not has_function_privilege('authenticated', 'public.reject_forecast_snapshot_update()', 'execute'), 'authenticated cannot directly execute snapshot update-rejection helper');
+select extensions.ok(not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.reject_forecast_snapshot_update()'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), 'PUBLIC cannot directly execute snapshot update-rejection helper');
+
+select extensions.ok(to_regprocedure('public.set_updated_at()') is not null, 'updated-at helper exists');
+select extensions.ok(not has_function_privilege('service_role', 'public.set_updated_at()', 'execute'), 'service role cannot directly execute updated-at helper');
+select extensions.ok(not has_function_privilege('anon', 'public.set_updated_at()', 'execute'), 'anon cannot directly execute updated-at helper');
+select extensions.ok(not has_function_privilege('authenticated', 'public.set_updated_at()', 'execute'), 'authenticated cannot directly execute updated-at helper');
+select extensions.ok(not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.set_updated_at()'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), 'PUBLIC cannot directly execute updated-at helper');
+
+select extensions.ok(to_regprocedure('public.handle_new_user()') is not null, 'signup-profile helper exists');
+select extensions.ok(not has_function_privilege('service_role', 'public.handle_new_user()', 'execute'), 'service role cannot directly execute signup-profile helper');
+select extensions.ok(not has_function_privilege('anon', 'public.handle_new_user()', 'execute'), 'anon cannot directly execute signup-profile helper');
+select extensions.ok(not has_function_privilege('authenticated', 'public.handle_new_user()', 'execute'), 'authenticated cannot directly execute signup-profile helper');
+select extensions.ok(not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.handle_new_user()'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), 'PUBLIC cannot directly execute signup-profile helper');
+
+select extensions.ok(to_regprocedure('public.health_check()') is not null, 'health check exists');
+select extensions.ok(has_function_privilege('anon', 'public.health_check()', 'execute'), 'anon can execute health check');
+select extensions.ok(has_function_privilege('authenticated', 'public.health_check()', 'execute'), 'authenticated can execute health check');
+select extensions.ok(not exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.health_check()'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), 'PUBLIC cannot execute health check');
+select extensions.ok(public.health_check(), 'health check behavior is preserved');
 
 delete from auth.users where id = :'test_user_id';
 select * from extensions.finish();
