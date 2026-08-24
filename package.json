@@ -7,7 +7,7 @@
     "dev": "python3 -m http.server 4173",
     "build": "node scripts/build.mjs",
     "test": "node scripts/test-node.mjs",
-    "test:db": "supabase test db",
+    "test:db": "node scripts/test-db.mjs",
     "check": "node scripts/check-js.mjs && npm test && npm run build"
   },
   "engines": {

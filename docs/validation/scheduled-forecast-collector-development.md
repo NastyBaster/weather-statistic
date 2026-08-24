@@ -46,6 +46,15 @@ In the repository hardening workspace, Node checks are available. Deno, Supabase
 passing result. Remote development validation remains pending and no production environment was
 accessed or changed.
 
+## Local validation result (2026-08-24)
+
+- Local PostgreSQL validation completed: 21 pgTAP assertions and 14 concurrency cases passed.
+- Failed, skipped, and not-run database cases: 0.
+- Node and Deno checks passed.
+- The local stack was stopped after validation.
+- Remote development validation remains pending; the scheduler is not enabled and production is
+  unchanged.
+
 ## Development execution gate
 
 Before enabling a development schedule, confirm the development target explicitly and use secret
