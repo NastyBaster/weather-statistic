@@ -2,7 +2,7 @@
 
 **Stage:** 5.2.1  
 **Repository implementation date:** 2026-08-23  
-**Remote development validation:** Pending explicit development-target execution
+**Remote development validation:** Scheduler schema applied; operational validation remains blocked
 
 This record is intentionally sanitized. Repository work implements the accepted scheduler
 contract, but it does not prove that a remote migration was applied, a secret was provisioned, an
@@ -54,6 +54,18 @@ accessed or changed.
 - The local stack was stopped after validation.
 - Remote development validation remains pending; the scheduler is not enabled and production is
   unchanged.
+
+## Development schema status (2026-08-25)
+
+- Scheduler migrations `202608230001` and `202608240001` were applied to development; the
+  development migration ledger is 5/5.
+- A sanitized post-migration audit found that the three operational scheduler RPCs retained
+  browser-role effective `EXECUTE` access, contrary to the service-role-only contract.
+- Corrective migration `202608250001_restrict_scheduler_rpc_privileges.sql` is prepared locally;
+  it has not been applied remotely.
+- Edge Function deployment, scheduler credential provisioning, Vault/Cron configuration, and
+  collector invocation remain blocked pending the corrective migration and separate authorization.
+- Production remains unchanged.
 
 ## Development execution gate
 
