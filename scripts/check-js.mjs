@@ -6,7 +6,9 @@ const sources = [
   ...readdirSync("js", { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
     .map((entry) => join("js", entry.name)),
-  "scripts/build.mjs",
+  ...readdirSync("scripts", { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".mjs"))
+    .map((entry) => join("scripts", entry.name)),
 ];
 
 for (const source of sources) {

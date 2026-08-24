@@ -1,0 +1,2 @@
+[functions.collect-forecasts]
+verify_jwt = false
