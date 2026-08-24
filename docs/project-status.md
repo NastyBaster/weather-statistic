@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-24
 
 This is the concise, sanitized continuity record. Update it when a stage merges; keep detailed
 procedures and raw evidence out of this file.
@@ -41,14 +41,15 @@ and the real-data dashboard remain deferred. Global geocoding is optional and de
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
 The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
-Stage 5.2.1 repository implementation is in progress: machine/manual authentication, strict
-request validation, database-enforced scheduled claiming/stale recovery, the snapshot parent
-write fence, transactional finalize fencing, and bounded deadline controls are implemented for
-review. Local database integration and remote development evidence remain required. Remote
-development migration, deployment, secret
-provisioning, Cron enablement, and the development validation matrix remain pending. No scheduler
-is enabled. Production rollout still requires a separately confirmed target and explicit
-authorization.
+Stage 5.2.1 repository hardening merged to `main` through PR #13: machine/manual authentication,
+strict request validation, database-enforced scheduled claiming/stale recovery, the snapshot
+parent write fence, transactional finalize fencing, and bounded deadline controls are available
+for the next gate. Local PostgreSQL validation is complete: 21 pgTAP assertions and 14
+concurrency cases passed, with 0 failed, skipped, or not-run cases; Node 40/40 and Deno 39/39
+also passed. Remote development migration, deployment, validation, and disable verification
+remain pending. The development scheduler is not enabled, production is unchanged, and Stage
+5.2.1 remains in progress. Production rollout still requires a separately confirmed target and
+explicit authorization.
 
 ## Working model
 
