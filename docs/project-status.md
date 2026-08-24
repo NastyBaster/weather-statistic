@@ -51,6 +51,16 @@ remain pending. The development scheduler is not enabled, production is unchange
 5.2.1 remains in progress. Production rollout still requires a separately confirmed target and
 explicit authorization.
 
+## Deferred Version 2 direction
+
+Version 2 may evaluate a shared precollected forecast archive independent of personal location
+selections, beginning with Ukrainian regional capitals. District centres require separate cost,
+capacity, and storage validation. The archive could let users see already collected history
+immediately; longer-term observed-weather history may be considered separately.
+
+This is not an approved implementation stage and must not delay the current core path. Stage 5.2.1
+continues against active personal locations as already planned.
+
 ## Working model
 
 Browser/cloud Codex is the planner and reviewer. Local Codex CLI executes grouped repository and

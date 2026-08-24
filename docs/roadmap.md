@@ -39,6 +39,16 @@ deploy, invoke, or operate them.
 | 10 | Charts, filters, and CSV export over the real read models | Planned |
 | 11 | Production hardening, operational review, and recovery exercises | Planned |
 
+## Deferred Version 2 direction
+
+Version 2 may evaluate a shared precollected forecast archive independent of personal location
+selections, beginning with Ukrainian regional capitals. District centres require separate cost,
+capacity, and storage validation. The archive could let users see already collected history
+immediately; longer-term observed-weather history may be considered separately.
+
+This is not an approved implementation stage and must not delay the current core path. Stage 5.2.1
+continues against active personal locations as already planned.
+
 ## Optional backlog
 
 These items do not block the core weather pipeline and require separate bounded stages:
