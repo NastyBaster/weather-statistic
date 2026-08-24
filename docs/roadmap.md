@@ -27,7 +27,7 @@ deploy, invoke, or operate them.
 | 5.1.1 | Authorized production rollout and validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
-| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Repository hardening is under review; local database and remote development validation remain pending. Production configuration and enablement require separate explicit authorization.** | **In progress** |
+| **5.2.1** | **Repository hardening merged to `main` through PR #13. Local PostgreSQL validation is complete: 21 pgTAP assertions and 14 concurrency cases passed, with 0 failed/skipped/not-run; Node 40/40 and Deno 39/39 passed. Remote development migration, deployment, validation, and disable verification remain pending. The development scheduler is not enabled; production configuration and enablement require separate explicit authorization.** | **In progress** |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | Planned |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
 | 7.0 | Observation provider contract and immutable observation schema | Planned |
@@ -47,7 +47,9 @@ These items do not block the core weather pipeline and require separate bounded 
 - global geocoding (formerly Stage 4.2);
 - canonical places shared across users.
 
-The scheduler contract and repository implementation are complete for review, but no remote
-migration or function deployment has occurred and no scheduler has been configured, enabled, or
-invoked. Stage 5.2.1 remains subject to its development validation gate and separate production
-authorization. Observations, accuracy, geocoding, and other future functionality remain deferred.
+The scheduler contract and repository hardening are merged to `main`, and local PostgreSQL
+validation is complete. No remote development migration, function deployment, validation, or
+disable verification has occurred, and no development scheduler has been configured, enabled, or
+invoked. Stage 5.2.1 remains in progress and subject to its remaining development validation gate
+and separate production authorization. Production is unchanged. Observations, accuracy,
+geocoding, and other future functionality remain deferred.
