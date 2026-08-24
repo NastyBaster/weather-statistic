@@ -284,6 +284,21 @@ Deno.test("timeout is retried and maximum attempts are enforced", async () => {
   assertEquals(calls, 2);
 });
 
+Deno.test("an overall abort stops provider retries", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  await assertRejects(
+    () =>
+      withRetry(() => {
+        calls++;
+        return Promise.resolve("unexpected");
+      }, { signal: controller.signal }),
+    ProviderError,
+  );
+  assertEquals(calls, 0);
+});
+
 Deno.test(
   "grouping is exact, timezone-sensitive and preserves fan-out IDs",
   () => {
@@ -329,7 +344,7 @@ Deno.test(
     });
     const allow = parseAllowlist(" admin-id, second-id ");
     assertEquals(
-      await authorize(new Request("https://x"), client(null), allow),
+      await authorize(new Request("https://x"), client(null), allow, "machine"),
       401,
     );
     assertEquals(
@@ -337,6 +352,7 @@ Deno.test(
         new Request("https://x", { headers: { authorization: "Bearer bad" } }),
         client(null, {}),
         allow,
+        "machine",
       ),
       401,
     );
@@ -347,6 +363,7 @@ Deno.test(
         }),
         client({ id: "other" }),
         allow,
+        "machine",
       ),
       403,
     );
@@ -359,8 +376,20 @@ Deno.test(
         }),
         client({ id: "admin-id" }),
         allow,
+        "machine",
       ),
-      { userId: "admin-id" },
+      { triggerType: "manual" },
+    );
+    assertEquals(
+      await authorize(
+        new Request("https://x", {
+          headers: { authorization: "Bearer machine" },
+        }),
+        client(null),
+        allow,
+        "machine",
+      ),
+      { triggerType: "scheduled" },
     );
   },
 );

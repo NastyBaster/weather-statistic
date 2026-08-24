@@ -38,11 +38,29 @@ and history remain intentionally demonstrative; production snapshots are not dis
 mix demo and real data without an explicit, visible boundary. Observations, accuracy calculations,
 and the real-data dashboard remain deferred. Global geocoding is optional and deferred.
 
+## Version 2 product direction
+
+After the planned core path is working, a future Version 2 should explore a shared, precollected
+weather archive that is independent of individual user selections. The intended starting scope is
+all Ukrainian regional capitals, with district centres considered only after capacity and cost
+validation. Users would link their selections to canonical places and immediately see already
+collected history instead of waiting for new personal-location snapshots. A longer-range archive
+of historical observed weather, including month-, year-, and decade-scale browsing, is also a
+Version 2 direction.
+
+This note is a product-direction reminder, not an approved implementation stage or a change to
+the current Stage 5.2.1 scope. The current scheduler work continues as planned against active
+personal locations and must not be delayed by Version 2 design work.
+
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
 The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
-Stage 5.2.1 is next. The scheduler is not implemented or enabled, and production rollout still
-requires a separately confirmed target and explicit authorization.
+Stage 5.2.1 repository implementation is in progress: machine/manual authentication, strict
+request validation, database-enforced scheduled claiming/stale recovery, and the snapshot parent
+write fence are implemented for review. Remote development migration, deployment, secret
+provisioning, Cron enablement, and the development validation matrix remain pending. No scheduler
+is enabled. Production rollout still requires a separately confirmed target and explicit
+authorization.
 
 ## Working model
 

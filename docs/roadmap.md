@@ -27,7 +27,7 @@ deploy, invoke, or operate them.
 | 5.1.1 | Authorized production rollout and validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
-| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Production configuration and enablement require separate explicit authorization.** | **Next** |
+| **5.2.1** | **Implement and validate scheduled collection against the approved contract, development first. Repository implementation is ready for review; remote development validation is pending. Production configuration and enablement require separate explicit authorization.** | **In progress** |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | Planned |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
 | 7.0 | Observation provider contract and immutable observation schema | Planned |
@@ -47,6 +47,18 @@ These items do not block the core weather pipeline and require separate bounded 
 - global geocoding (formerly Stage 4.2);
 - canonical places shared across users.
 
-The scheduler contract is complete, but no scheduler has been implemented, configured, deployed,
-enabled, or invoked. Stage 5.2.1 remains subject to its development gate and separate production
+## Version 2 direction (deferred)
+
+Once the current core path is operational, evaluate a shared national weather archive that is
+collected independently of user selections. Begin with all Ukrainian regional capitals; consider
+district centres only after provider-capacity, runtime, and storage validation. Canonical places
+would let a newly selecting user see previously collected forecast history immediately. A later
+observed-weather archive may support browsing historical days across months, years, and decades.
+
+This is a durable product note only. It does not alter the current roadmap order, authorize work,
+or expand Stage 5.2.1, which continues with active personal locations as already designed.
+
+The scheduler contract and repository implementation are complete for review, but no remote
+migration or function deployment has occurred and no scheduler has been configured, enabled, or
+invoked. Stage 5.2.1 remains subject to its development validation gate and separate production
 authorization. Observations, accuracy, geocoding, and other future functionality remain deferred.

@@ -3,7 +3,7 @@ import { withRetry } from "./retry.ts";
 import { Location, LocationGroup, ProviderError } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any -- narrowed PostgREST's fluent client boundary.
-type Db = { from(table: string): any };
+type Db = { from(table: string): any; rpc(name: string, args: unknown): any };
 type GroupOutcome = {
   succeeded: number;
   failed: number;
@@ -67,6 +67,7 @@ export async function collect(
   db: Db,
   now: () => Date = () => new Date(),
   provider = fetchForecast,
+  triggerType: "manual" | "scheduled" = "manual",
 ) {
   const startedAt = now().toISOString();
   const { data, error: locationError } = await db
@@ -75,17 +76,25 @@ export async function collect(
     .eq("is_active", true);
   if (locationError) throw new Error("active locations could not be read");
   const locations = (data ?? []) as Location[];
-  const { data: run, error: runError } = await db
-    .from("forecast_runs")
-    .insert({
+  const claim = triggerType === "scheduled"
+    ? await db.rpc("claim_scheduled_forecast_run", {
+      requested_locations_total: locations.length,
+    })
+    : await db.from("forecast_runs").insert({
       trigger_type: "manual",
       status: "running",
       started_at: startedAt,
       locations_total: locations.length,
-    })
-    .select("id")
-    .single();
+    }).select("id").single();
+  const run = triggerType === "scheduled" ? claim.data?.[0] : claim.data;
+  const runError = claim.error;
+  if (triggerType === "scheduled" && run?.result === "scheduled_run_active") {
+    return "scheduled_run_active" as const;
+  }
   if (runError || !run) throw new Error("forecast run could not be created");
+  const runId = triggerType === "scheduled" ? run.run_id : run.id;
+  const deadline = new AbortController();
+  const deadlineTimer = setTimeout(() => deadline.abort(), 120_000);
   let succeeded = 0,
     failed = 0,
     snapshots = 0;
@@ -96,19 +105,22 @@ export async function collect(
       4,
       async (group) => {
         try {
-          const response = await withRetry((signal) =>
-            provider(
-              {
-                latitude: group.latitude,
-                longitude: group.longitude,
-                timezone: group.timezone,
-              },
-              signal,
-            )
+          if (deadline.signal.aborted) throw new ProviderError("timeout", false);
+          const response = await withRetry(
+            (signal) =>
+              provider(
+                {
+                  latitude: group.latitude,
+                  longitude: group.longitude,
+                  timezone: group.timezone,
+                },
+                signal,
+              ),
+            { signal: deadline.signal },
           );
           const rows = group.locations.flatMap((location) =>
             response.days.map((day) => ({
-              forecast_run_id: run.id,
+              forecast_run_id: runId,
               location_id: location.id,
               collected_at: response.collectedAt,
               collection_date: response.collectionDate,
@@ -121,18 +133,15 @@ export async function collect(
               weather_code: day.weatherCode,
             }))
           );
-          const { data, error } = await db
-            .from("forecast_snapshots")
-            .upsert(rows, {
-              onConflict: "location_id,collection_date,target_date",
-              ignoreDuplicates: true,
-            })
-            .select("id");
+          const { data, error } = await db.rpc("insert_forecast_snapshot_batch", {
+            requested_run_id: runId,
+            requested_rows: rows,
+          });
           if (error) throw new Error("snapshot insert failed");
           return {
             succeeded: group.locations.length,
             failed: 0,
-            snapshots: data?.length ?? 0,
+            snapshots: data?.[0]?.inserted_count ?? 0,
           };
         } catch (error) {
           return {
@@ -155,6 +164,7 @@ export async function collect(
     succeeded = 0;
     errors.push("collector");
   }
+  clearTimeout(deadlineTimer);
   const status = terminalStatus(succeeded, failed),
     completedAt = now().toISOString();
   const message = failed
@@ -175,10 +185,10 @@ export async function collect(
       snapshots_created: snapshots,
       error_message: message,
     })
-    .eq("id", run.id);
+    .eq("id", runId);
   if (completionError) throw new Error("forecast run terminal update failed");
   return {
-    runId: run.id,
+    runId,
     status,
     locationsTotal: locations.length,
     locationsSucceeded: succeeded,
