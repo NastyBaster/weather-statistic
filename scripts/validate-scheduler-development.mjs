@@ -1,4 +1,5 @@
 import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
+import { isDirectEsModule } from "./lib/es-module-entrypoint.mjs";
 
 const live = process.argv.includes("--live-development");
 const hybrid = process.argv.includes("--hybrid-sql-editor");
@@ -81,7 +82,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   return state;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectEsModule(import.meta.url, process.argv[1])) {
   const report = await offlineReport();
   if (live || hybrid || confirmed) {
     const hybridReport = await runHybridDevelopment(process.argv.slice(2));

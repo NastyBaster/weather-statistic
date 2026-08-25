@@ -50,6 +50,10 @@ resumes only with sanitized manual evidence. The CLI never receives a database p
 plaintext. Tests remain synthetic; no live execution has occurred, Cron is not configured, and
 production is unchanged.
 
+The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
+documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
+fix does not execute a live validation or alter the scheduler contract.
+
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
 at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive
