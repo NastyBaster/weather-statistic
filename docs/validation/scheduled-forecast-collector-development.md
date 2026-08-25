@@ -54,6 +54,17 @@ The harness direct-entrypoint guard is normalized through Node file URL/path API
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
 fix does not execute a live validation or alter the scheduler contract.
 
+Use one cross-platform command shape for an explicitly authorized hybrid development Phase A:
+
+```text
+npm run validate:scheduler:development -- --live-development --hybrid-sql-editor --confirm-development-smoke --development-name=<development-display-name> --production-name=<production-display-name>
+```
+
+The argument contract accepts the normal npm-forwarded vector and, for the Windows PowerShell npm
+compatibility path that converts post-separator options into npm config values, reconstructs only
+the allowlisted runtime options. Missing, duplicate, malformed, or unknown direct options still
+fail closed before any environment operation.
+
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
 at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive
