@@ -1,4 +1,7 @@
+import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
+
 const live = process.argv.includes("--live-development");
+const hybrid = process.argv.includes("--hybrid-sql-editor");
 const confirmed = process.argv.includes("--confirm-development-smoke");
 
 export function immutableEqual(left, right) {
@@ -38,9 +41,53 @@ export async function offlineReport() {
   return { fixtures: 15, passed: tests.filter(Boolean).length, failed: tests.filter((test) => !test).length, skipped: 0, notRun: 0, retries: 0, httpRequests: 0, pgNetEnqueues: 0, collectorInvocations: 0, remoteMutations: 0, productionOperations: 0 };
 }
 
+export function readRuntimeArgument(args, name) {
+  const value = args.find((argument) => argument.startsWith(`${name}=`));
+  return value?.slice(name.length + 1) || "";
+}
+
+export async function runHybridDevelopment(args, binding = createSchedulerDevelopmentLocalBinding()) {
+  if (!args.includes("--live-development") || !args.includes("--hybrid-sql-editor") || !args.includes("--confirm-development-smoke")) {
+    throw new Error("hybrid_live_confirmation_required");
+  }
+  const expectedDevelopment = readRuntimeArgument(args, "--development-name");
+  const expectedProduction = readRuntimeArgument(args, "--production-name");
+  if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
+
+  if (args.includes("--resume-after-manual-enqueue")) {
+    await binding.readPhaseState();
+    const resumed = sanitizePhaseState(assertResumeInput({
+      enqueueCommitted: readRuntimeArgument(args, "--enqueue-committed") === "true",
+      evidence: {
+        newScheduledRuns: Number(readRuntimeArgument(args, "--new-scheduled-runs")),
+        duplicateIdentityCount: Number(readRuntimeArgument(args, "--duplicate-identity-count")),
+        counterInvariant: readRuntimeArgument(args, "--counter-invariant") === "true",
+      },
+    }));
+    await binding.cleanupArtifacts();
+    return resumed;
+  }
+
+  const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
+  const negatives = await binding.runNegativeCases(preflight.endpoint, async () => {});
+  await binding.writeSqlArtifacts(preflight.linkedRef);
+  const state = sanitizePhaseState({
+    phase: "manual_enqueue_required",
+    negative: negatives,
+    manual_enqueue_required: true,
+    cleanup: "after_manual_evidence",
+  });
+  await binding.writePhaseState(state);
+  return state;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const report = await offlineReport();
-  if (live && confirmed) throw new Error("live_adapter_required");
+  if (live || hybrid || confirmed) {
+    const hybridReport = await runHybridDevelopment(process.argv.slice(2));
+    console.log(JSON.stringify(hybridReport));
+    process.exit(0);
+  }
   console.log(JSON.stringify(report));
   process.exit(report.failed === 0 ? 0 : 1);
 }

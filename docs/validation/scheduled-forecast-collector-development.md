@@ -40,9 +40,15 @@ explicit flags, independently verified target metadata, and a separately supplie
 adapter. It stores no credentials or environment identifiers. Temporary-harness smoke validation
 remains incomplete; Cron is not configured and production is unchanged.
 
-A development-only injected live adapter now provides fail-closed target, metadata, negative
-request, enqueue parsing, polling, and aggregate-evidence boundaries. Its tests are synthetic;
-live execution still requires separate explicit authorization and production remains unchanged.
+A development-only hybrid runtime binding now connects the tracked harness to authenticated local
+Supabase CLI metadata and Node built-in `fetch`. Its default remains synthetic/offline. A live
+development run requires explicit development and production display-name inputs, confirmation,
+and the `--hybrid-sql-editor` mode; production mode is intentionally unsupported. The hybrid
+flow validates target metadata and the negative HTTP contract, writes non-repository temporary
+SQL Editor artifacts for one credential-safe `pg_net` enqueue and later aggregate evidence, then
+resumes only with sanitized manual evidence. The CLI never receives a database password or Vault
+plaintext. Tests remain synthetic; no live execution has occurred, Cron is not configured, and
+production is unchanged.
 
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
