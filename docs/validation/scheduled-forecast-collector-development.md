@@ -40,6 +40,10 @@ explicit flags, independently verified target metadata, and a separately supplie
 adapter. It stores no credentials or environment identifiers. Temporary-harness smoke validation
 remains incomplete; Cron is not configured and production is unchanged.
 
+A development-only injected live adapter now provides fail-closed target, metadata, negative
+request, enqueue parsing, polling, and aggregate-evidence boundaries. Its tests are synthetic;
+live execution still requires separate explicit authorization and production remains unchanged.
+
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
 at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive

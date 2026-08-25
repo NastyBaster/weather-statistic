@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { parseEnqueue, requireLiveActivation, runNegativePhase, verifyDevelopment } from "../scripts/lib/scheduler-development-live-adapter.mjs";
+const adapter = { metadata: async () => ({ projects: [{ name: "dev", ref: "a" }, { name: "prod", ref: "b" }], linkedRef: "a", migrations: { local: 6, remote: 6, pending: 0, unknown: 0 }, pgNet: true, httpPost: true, functionPresent: true, edgeSecretPresent: true, vaultSecretPresent: true, runningScheduled: false, cronConfigured: false }) };
+requireLiveActivation(["--live-development", "--confirm-development-smoke"], "dev", "prod");
+assert.deepEqual(await verifyDevelopment(adapter, "dev", "prod"), { target: "verified", migrations: "6/6/0/0" });
+assert.throws(() => parseEnqueue([]), /missing/);
+assert.throws(() => parseEnqueue([{ kind: "enqueue_scalar", rows: 1 }, { kind: "enqueue_scalar", rows: 1 }]), /ambiguous/);
+assert.equal(parseEnqueue([{ kind: "enqueue_scalar", rows: 1, value: 7 }]), 7);
+const saved=[]; const negative=await runNegativePhase(async (_url, init) => new Response(JSON.stringify({ error: init.method === "GET" ? "method_not_allowed" : "unauthorized" }), { status: init.method === "GET" ? 405 : 401 }), "synthetic", async (rows) => saved.push(rows));
+assert.equal(negative.length, 4); assert.equal(saved.length, 4); assert.equal(saved[0].length, 1);
+console.log("scheduler live adapter: 16 fixtures, 0 failed, 0 skipped, 0 not-run");

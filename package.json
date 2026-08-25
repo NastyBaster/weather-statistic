@@ -9,6 +9,7 @@
     "test": "node scripts/test-node.mjs",
     "test:db": "node scripts/test-db.mjs",
     "test:scheduler-harness": "node tests/scheduler-validation-harness.test.js",
+    "test:scheduler-live-adapter": "node tests/scheduler-development-live-adapter.test.js",
     "validate:scheduler:development": "node scripts/validate-scheduler-development.mjs",
     "check": "node scripts/check-js.mjs && npm test && npm run build"
   },
