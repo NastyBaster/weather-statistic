@@ -34,6 +34,12 @@ Edge Function was deployed, or a Cron job was enabled. Production was not access
 
 ## Local checks
 
+The tracked `scripts/validate-scheduler-development.mjs` harness replaces disposable validation
+scripts. Its default mode runs only synthetic offline fixtures; live development mode requires
+explicit flags, independently verified target metadata, and a separately supplied trusted runtime
+adapter. It stores no credentials or environment identifiers. Temporary-harness smoke validation
+remains incomplete; Cron is not configured and production is unchanged.
+
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
 at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive
