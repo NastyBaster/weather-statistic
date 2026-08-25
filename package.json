@@ -11,6 +11,7 @@
     "test:scheduler-harness": "node tests/scheduler-validation-harness.test.js",
     "test:scheduler-live-adapter": "node tests/scheduler-development-live-adapter.test.js",
     "test:scheduler-local-binding": "node tests/scheduler-development-local-binding.test.js",
+    "test:scheduler-entrypoint": "node tests/scheduler-entrypoint.test.js",
     "validate:scheduler:development": "node scripts/validate-scheduler-development.mjs",
     "check": "node scripts/check-js.mjs && npm test && npm run build"
   },
