@@ -1,5 +1,5 @@
-const BOOLEAN_FLAGS = ["live-development", "hybrid-sql-editor", "confirm-development-smoke", "resume-after-manual-enqueue"];
-const VALUE_FLAGS = ["development-name", "production-name", "enqueue-committed", "new-scheduled-runs", "duplicate-identity-count", "counter-invariant"];
+const BOOLEAN_FLAGS = ["live-development", "hybrid-sql-editor", "confirm-development-smoke", "resume-after-manual-enqueue", "resume-after-manual-preflight"];
+const VALUE_FLAGS = ["development-name", "production-name", "enqueue-committed", "new-scheduled-runs", "duplicate-identity-count", "counter-invariant", "attempt-boundary", "scheduled-run-baseline", "evidence-result-tag", "evidence-run-category", "terminal-scheduled-runs", "running-scheduled-runs", "terminal-status", "locations-total", "locations-succeeded", "locations-failed", "snapshots-created", "unexpected-active-scheduled-runs"];
 
 const envKey = (flag) => `npm_config_${flag.replaceAll("-", "_")}`;
 const environmentValue = (environment, flag) => environment[envKey(flag)] ?? environment[envKey(flag).toUpperCase()];
@@ -39,6 +39,7 @@ export function parseSchedulerRuntimeArguments(argv = [], environment = {}) {
       if (name === "hybrid-sql-editor") parsed.hybrid = true;
       if (name === "confirm-development-smoke") parsed.confirmed = true;
       if (name === "resume-after-manual-enqueue") parsed.resume = true;
+      if (name === "resume-after-manual-preflight") parsed.resume_preflight = true;
       continue;
     }
     const value = valueParts.join("=");
