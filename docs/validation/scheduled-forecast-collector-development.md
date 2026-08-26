@@ -43,12 +43,28 @@ remains incomplete; Cron is not configured and production is unchanged.
 A development-only hybrid runtime binding now connects the tracked harness to authenticated local
 Supabase CLI metadata and Node built-in `fetch`. Its default remains synthetic/offline. A live
 development run requires explicit development and production display-name inputs, confirmation,
-and the `--hybrid-sql-editor` mode; production mode is intentionally unsupported. The hybrid
-flow validates target metadata and the negative HTTP contract, writes non-repository temporary
-SQL Editor artifacts for one credential-safe `pg_net` enqueue and later aggregate evidence, then
-resumes only with sanitized manual evidence. The CLI never receives a database password or Vault
-plaintext. Tests remain synthetic; no live execution has occurred, Cron is not configured, and
-production is unchanged.
+and the `--hybrid-sql-editor` mode; production mode is intentionally unsupported. The CLI never
+receives a database password or Vault plaintext.
+
+The hybrid flow has a deliberately separated manual SQL boundary. It first writes a distinct
+read-only pre-enqueue artifact, which establishes a durable database attempt boundary and
+baseline before any negative request is made. That artifact verifies `pg_net`, the callable
+`net.http_post` signature, the unique Vault secret name, no active scheduled run, and no relevant
+Cron job without reading Vault plaintext. After an explicitly confirmed sanitized preflight
+result, the harness performs the four bounded negative HTTP checks once, then writes separately
+identifiable enqueue and post-enqueue evidence artifacts. Negative requests are never repeated
+automatically, and an old Phase A result without a pre-negative durable baseline fails closed as
+`existing_negative_baseline_not_provable` rather than claiming retrospective proof.
+
+The enqueue artifact repeats safety-critical checks in its own write transaction immediately
+before its one `pg_net` call. It uses the same advisory lock as the scheduled claim protocol,
+rejects changed scheduled-run baseline or an active run, verifies the extension, routine, Vault
+name, and Cron state, and keeps the credential inside the database/Vault expression. The
+read-only post-enqueue artifact is bound to the pre-enqueue boundary and reports only tagged
+aggregate evidence: no/one-running/one-terminal/multiple runs, the schema terminal categories,
+counters, invariants, duplicate snapshot identities, and unexpected active runs. Sanitized manual
+transfer accepts only the required tagged aggregate fields. Tests remain synthetic; no SQL was
+executed for this repository-only change, Cron is not configured, and production is unchanged.
 
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility

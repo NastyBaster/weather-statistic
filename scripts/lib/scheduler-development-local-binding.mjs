@@ -2,6 +2,13 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  buildEnqueueSql as buildGuardedEnqueueSql,
+  buildEvidenceSql as buildBoundEvidenceSql,
+  buildPreflightSql,
+  requireAttemptBoundary,
+  requireBaseline,
+} from "./scheduler-smoke-artifacts.mjs";
 
 const FUNCTION_NAME = "collect-forecasts";
 const EDGE_SECRET_NAME = "FORECAST_SCHEDULER_TOKEN";
@@ -32,83 +39,8 @@ export function immutableNegativeRecords(records) {
   }));
 }
 
-export function buildEnqueueSql(projectRef) {
-  if (!/^[a-z0-9-]+$/.test(projectRef)) fail("linked_reference_invalid");
-  return `begin;
-with vault_token as (
-  select min(decrypted_secret) as token
-  from vault.decrypted_secrets
-  where name = '${VAULT_SECRET_NAME}'
-  having count(*) = 1
-), enqueued as (
-  select net.http_post(
-    url := 'https://${projectRef}.supabase.co/functions/v1/${FUNCTION_NAME}',
-    body := '{}'::jsonb,
-    params := '{}'::jsonb,
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || token
-    ),
-    timeout_milliseconds := 140000
-  ) as ignored_request_id
-  from vault_token
-)
-select exists(select 1 from enqueued) as enqueue_committed;
-commit;
-`;
-}
-
-export function buildEvidenceSql() {
-  return `begin;
-set transaction read only;
-with validation_window as (
-  select date_trunc('minute', now()) - interval '20 minutes' as started_at
-), candidate_runs as (
-  select status, locations_total, locations_succeeded, locations_failed, snapshots_created
-  from public.forecast_runs, validation_window
-  where trigger_type = 'scheduled' and created_at >= validation_window.started_at
-), summary as (
-  select
-    count(*) filter (where status in ('success', 'partial', 'failed'))::integer as terminal_runs,
-    count(*) filter (where status = 'running')::integer as running_runs,
-    count(*)::integer as new_scheduled_runs,
-    coalesce(max(locations_total), 0)::integer as locations_total,
-    coalesce(max(locations_succeeded), 0)::integer as locations_succeeded,
-    coalesce(max(locations_failed), 0)::integer as locations_failed,
-    coalesce(max(snapshots_created), 0)::integer as snapshots_created,
-    coalesce(max(case when status in ('success', 'partial', 'failed') then status end), 'none') as terminal_status
-  from candidate_runs
-), duplicate_identities as (
-  select count(*)::integer as duplicate_immutable_identity_count
-  from (
-    select snapshots.location_id, snapshots.collection_date, snapshots.target_date
-    from public.forecast_snapshots as snapshots
-    join public.forecast_runs as runs on runs.id = snapshots.forecast_run_id
-    join validation_window on true
-    where runs.trigger_type = 'scheduled' and runs.created_at >= validation_window.started_at
-    group by snapshots.location_id, snapshots.collection_date, snapshots.target_date
-    having count(*) > 1
-  ) as duplicate_keys
-)
-select
-  new_scheduled_runs,
-  terminal_runs,
-  running_runs,
-  terminal_status,
-  locations_total,
-  locations_succeeded,
-  locations_failed,
-  snapshots_created,
-  (locations_total >= 0 and locations_succeeded >= 0 and locations_failed >= 0
-    and locations_succeeded + locations_failed = locations_total) as counter_invariant,
-  duplicate_immutable_identity_count
-from summary cross join duplicate_identities;
-rollback;
-`;
-}
-
 export function sanitizePhaseState(state) {
-  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup"];
+  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline"];
   const output = {};
   for (const key of allowed) if (key in state) output[key] = state[key];
   return JSON.parse(JSON.stringify(output));
@@ -235,11 +167,22 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     return immutableNegativeRecords(records);
   }
 
-  async function writeSqlArtifacts(projectRef) {
+  async function writePreflightArtifact() {
     await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
-    const enqueuePath = join(temporaryDirectory, "scheduler-enqueue.sql");
-    const evidencePath = join(temporaryDirectory, "scheduler-evidence.sql");
-    for (const [path, content] of [[enqueuePath, buildEnqueueSql(projectRef)], [evidencePath, buildEvidenceSql()]]) {
+    const preflightPath = join(temporaryDirectory, "scheduler-pre-enqueue-preflight.sql");
+    const staged = `${preflightPath}.tmp`;
+    await filesystem.writeFile(staged, buildPreflightSql(), { encoding: "utf8", mode: 0o600 });
+    await filesystem.rename(staged, preflightPath);
+    return { preflightPath };
+  }
+
+  async function writeSqlArtifacts(projectRef, attemptBoundary, scheduledRunBaseline) {
+    requireAttemptBoundary(attemptBoundary);
+    requireBaseline(scheduledRunBaseline);
+    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    const enqueuePath = join(temporaryDirectory, "scheduler-exactly-once-enqueue.sql");
+    const evidencePath = join(temporaryDirectory, "scheduler-post-enqueue-evidence.sql");
+    for (const [path, content] of [[enqueuePath, buildGuardedEnqueueSql(projectRef, attemptBoundary, scheduledRunBaseline)], [evidencePath, buildBoundEvidenceSql(attemptBoundary)]]) {
       const staged = `${path}.tmp`;
       await filesystem.writeFile(staged, content, { encoding: "utf8", mode: 0o600 });
       await filesystem.rename(staged, path);
@@ -256,7 +199,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (state.phase !== "manual_enqueue_required" || state.manual_enqueue_required !== true) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "manual_enqueue_required"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
@@ -264,5 +207,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     await filesystem.rm(temporaryDirectory, { recursive: true, force: true });
   }
 
-  return { preflight, runNegativeCases, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
 }

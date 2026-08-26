@@ -1,6 +1,7 @@
 import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
 import { isDirectEsModule } from "./lib/es-module-entrypoint.mjs";
 import { parseSchedulerRuntimeArguments } from "./lib/scheduler-validation-arguments.mjs";
+import { parsePreflightResult } from "./lib/scheduler-smoke-artifacts.mjs";
 
 export function immutableEqual(left, right) {
   const fields = ["label", "status", "category", "reachedEndpoint"];
@@ -54,7 +55,10 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
 
   if (parsed.resume) {
-    await binding.readPhaseState();
+    const state = await binding.readPhaseState();
+    if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
+      throw new Error("existing_negative_baseline_not_provable");
+    }
     const resumed = sanitizePhaseState(assertResumeInput({
       enqueueCommitted: parsed.enqueue_committed === "true",
       evidence: {
@@ -67,14 +71,40 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     return resumed;
   }
 
-  const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
-  const negatives = await binding.runNegativeCases(preflight.endpoint, async () => {});
-  await binding.writeSqlArtifacts(preflight.linkedRef);
+  if (parsed.resume_preflight) {
+    const state = await binding.readPhaseState();
+    if (state.phase !== "read_only_preflight_required") throw new Error("manual_preflight_phase_state_invalid");
+    let manualPreflight;
+    try {
+      manualPreflight = parsePreflightResult({
+        result_tag: "scheduler_smoke_preflight",
+        attempt_boundary: parsed.attempt_boundary,
+        scheduled_run_baseline: Number(parsed.scheduled_run_baseline),
+        negative_baseline_status: "baseline_established_before_negative_phase",
+      });
+    } catch {
+      throw new Error("manual_preflight_result_invalid");
+    }
+    const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
+    const negatives = await binding.runNegativeCases(preflight.endpoint, async () => {});
+    await binding.writeSqlArtifacts(preflight.linkedRef, manualPreflight.attemptBoundary, manualPreflight.scheduledRunBaseline);
+    const next = sanitizePhaseState({
+      phase: "manual_enqueue_required",
+      negative: negatives,
+      manual_enqueue_required: true,
+      attempt_boundary: manualPreflight.attemptBoundary,
+      scheduled_run_baseline: manualPreflight.scheduledRunBaseline,
+      cleanup: "after_manual_evidence",
+    });
+    await binding.writePhaseState(next);
+    return next;
+  }
+
+  await binding.preflight({ expectedDevelopment, expectedProduction });
+  await binding.writePreflightArtifact();
   const state = sanitizePhaseState({
-    phase: "manual_enqueue_required",
-    negative: negatives,
-    manual_enqueue_required: true,
-    cleanup: "after_manual_evidence",
+    phase: "read_only_preflight_required",
+    cleanup: "after_manual_preflight",
   });
   await binding.writePhaseState(state);
   return state;
