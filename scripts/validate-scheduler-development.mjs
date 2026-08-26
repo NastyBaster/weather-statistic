@@ -1,9 +1,6 @@
 import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
 import { isDirectEsModule } from "./lib/es-module-entrypoint.mjs";
-
-const live = process.argv.includes("--live-development");
-const hybrid = process.argv.includes("--hybrid-sql-editor");
-const confirmed = process.argv.includes("--confirm-development-smoke");
+import { parseSchedulerRuntimeArguments } from "./lib/scheduler-validation-arguments.mjs";
 
 export function immutableEqual(left, right) {
   const fields = ["label", "status", "category", "reachedEndpoint"];
@@ -47,22 +44,23 @@ export function readRuntimeArgument(args, name) {
   return value?.slice(name.length + 1) || "";
 }
 
-export async function runHybridDevelopment(args, binding = createSchedulerDevelopmentLocalBinding()) {
-  if (!args.includes("--live-development") || !args.includes("--hybrid-sql-editor") || !args.includes("--confirm-development-smoke")) {
+export async function runHybridDevelopment(args, binding = createSchedulerDevelopmentLocalBinding(), environment = {}) {
+  const parsed = parseSchedulerRuntimeArguments(args, environment);
+  if (!parsed.live || !parsed.hybrid || !parsed.confirmed) {
     throw new Error("hybrid_live_confirmation_required");
   }
-  const expectedDevelopment = readRuntimeArgument(args, "--development-name");
-  const expectedProduction = readRuntimeArgument(args, "--production-name");
+  const expectedDevelopment = parsed.development_name;
+  const expectedProduction = parsed.production_name;
   if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
 
-  if (args.includes("--resume-after-manual-enqueue")) {
+  if (parsed.resume) {
     await binding.readPhaseState();
     const resumed = sanitizePhaseState(assertResumeInput({
-      enqueueCommitted: readRuntimeArgument(args, "--enqueue-committed") === "true",
+      enqueueCommitted: parsed.enqueue_committed === "true",
       evidence: {
-        newScheduledRuns: Number(readRuntimeArgument(args, "--new-scheduled-runs")),
-        duplicateIdentityCount: Number(readRuntimeArgument(args, "--duplicate-identity-count")),
-        counterInvariant: readRuntimeArgument(args, "--counter-invariant") === "true",
+        newScheduledRuns: Number(parsed.new_scheduled_runs),
+        duplicateIdentityCount: Number(parsed.duplicate_identity_count),
+        counterInvariant: parsed.counter_invariant === "true",
       },
     }));
     await binding.cleanupArtifacts();
@@ -84,8 +82,9 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
 
 if (isDirectEsModule(import.meta.url, process.argv[1])) {
   const report = await offlineReport();
-  if (live || hybrid || confirmed) {
-    const hybridReport = await runHybridDevelopment(process.argv.slice(2));
+  const parsed = parseSchedulerRuntimeArguments(process.argv.slice(2), process.env);
+  if (parsed.args.length > 0) {
+    const hybridReport = await runHybridDevelopment(parsed.args);
     console.log(JSON.stringify(hybridReport));
     process.exit(0);
   }
