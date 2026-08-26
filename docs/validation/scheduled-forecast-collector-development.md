@@ -56,6 +56,12 @@ identifiable enqueue and post-enqueue evidence artifacts. Negative requests are 
 automatically, and an old Phase A result without a pre-negative durable baseline fails closed as
 `existing_negative_baseline_not_provable` rather than claiming retrospective proof.
 
+The local phase state is updated before each negative submission and again after its sanitized
+response is observed. Any interruption therefore leaves a non-replayable manual-intervention
+state rather than authorizing a repeated request. Final resume requires the tagged evidence
+result and all allowlisted aggregate fields, and rejects no-run, running-run, multiple-run,
+unknown-status, or active-run results before cleanup.
+
 The enqueue artifact repeats safety-critical checks in its own write transaction immediately
 before its one `pg_net` call. It uses the same advisory lock as the scheduled claim protocol,
 rejects changed scheduled-run baseline or an active run, verifies the extension, routine, Vault

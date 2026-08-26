@@ -150,6 +150,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     ];
     const records = [];
     for (const [label, method, body, headers] of cases) {
+      await save(immutableNegativeRecords(records), label);
       let response;
       try {
         response = await fetchImpl(endpoint, { method, body, headers, redirect: "error" });
@@ -162,7 +163,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       const category = SAFE_NEGATIVE_CATEGORIES.get(response.status);
       if (payload?.error !== category) fail("negative_response_unexpected");
       records.push(Object.freeze({ label, status: response.status, category, reachedEndpoint: true }));
-      await save(immutableNegativeRecords(records));
+      await save(immutableNegativeRecords(records), null);
     }
     return immutableNegativeRecords(records);
   }

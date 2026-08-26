@@ -45,10 +45,11 @@ assert.equal(preflight.migrations, "6/6/0/0");
 const saved = [];
 const negative = await binding.runNegativeCases(preflight.endpoint, async (records) => saved.push(records));
 assert.equal(negative.length, 4);
-assert.equal(saved.length, 4);
-assert.equal(saved[0].length, 1);
-assert.equal(saved[3].length, 4);
-assert.deepEqual(saved[0][0], negative[0]);
+assert.equal(saved.length, 8);
+assert.equal(saved[0].length, 0);
+assert.equal(saved[1].length, 1);
+assert.equal(saved[7].length, 4);
+assert.deepEqual(saved[1][0], negative[0]);
 await binding.writePreflightArtifact();
 await binding.writeSqlArtifacts(ref, "2026-01-01T00:00:00Z", 0);
 assert.equal(files.created.length, 3);
@@ -90,14 +91,41 @@ const afterManualPreflight = await runHybridDevelopment([
 ], entrypoint);
 assert.equal(afterManualPreflight.phase, "manual_enqueue_required");
 assert.equal(afterManualPreflight.negative.length, 4);
+const progressStates = [];
+const interruptedBinding = {
+  ...entrypoint,
+  async readPhaseState() { return { phase: "read_only_preflight_required" }; },
+  async runNegativeCases(_endpoint, save) {
+    await save([negative[0]], "post_no_auth");
+    throw new Error("negative_request_submission_failed");
+  },
+  async writePhaseState(state) { progressStates.push(state); },
+};
+await assert.rejects(runHybridDevelopment([
+  "--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--resume-after-manual-preflight",
+  "--development-name=development", "--production-name=production", "--attempt-boundary=2026-01-01T00:00:00Z", "--scheduled-run-baseline=0",
+], interruptedBinding), /negative_request_submission_failed/);
+assert.equal(progressStates[0].phase, "negative_request_in_flight");
+assert.equal(progressStates[0].negative.length, 1);
 persistedState = { phase: "manual_enqueue_required", manual_enqueue_required: true, attempt_boundary: "2026-01-01T00:00:00Z", scheduled_run_baseline: 0 };
 const resumed = await runHybridDevelopment([
   "--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--resume-after-manual-enqueue",
   "--development-name=development", "--production-name=production", "--enqueue-committed=true",
-  "--new-scheduled-runs=1", "--duplicate-identity-count=0", "--counter-invariant=true",
+  "--evidence-result-tag=scheduler_smoke_evidence", "--evidence-run-category=one_terminal_scheduled_run",
+  "--new-scheduled-runs=1", "--terminal-scheduled-runs=1", "--running-scheduled-runs=0", "--terminal-status=succeeded",
+  "--locations-total=0", "--locations-succeeded=0", "--locations-failed=0", "--snapshots-created=0",
+  "--duplicate-identity-count=0", "--unexpected-active-scheduled-runs=0", "--counter-invariant=true",
 ], entrypoint);
 assert.equal(resumed.phase, "complete");
 assert.equal(entrypoint.cleaned, true);
+await assert.rejects(runHybridDevelopment([
+  "--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--resume-after-manual-enqueue",
+  "--development-name=development", "--production-name=production", "--enqueue-committed=true",
+  "--evidence-result-tag=scheduler_smoke_evidence", "--evidence-run-category=no_new_scheduled_run",
+  "--new-scheduled-runs=0", "--terminal-scheduled-runs=0", "--running-scheduled-runs=0", "--terminal-status=none",
+  "--locations-total=0", "--locations-succeeded=0", "--locations-failed=0", "--snapshots-created=0",
+  "--duplicate-identity-count=0", "--unexpected-active-scheduled-runs=0", "--counter-invariant=true",
+], { ...entrypoint, readPhaseState: async () => ({ phase: "manual_enqueue_required", attempt_boundary: "2026-01-01T00:00:00Z", scheduled_run_baseline: 0 }) }), /manual_evidence_rejected/);
 assert.throws(() => buildEnqueueSql("invalid value", "2026-01-01T00:00:00Z", 0), /linked_reference_invalid/);
 assert.match(buildEvidenceSql("2026-01-01T00:00:00Z"), /read only/i);
 assert.match(buildPreflightSql(), /read only/i);

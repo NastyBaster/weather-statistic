@@ -1,7 +1,7 @@
 import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
 import { isDirectEsModule } from "./lib/es-module-entrypoint.mjs";
 import { parseSchedulerRuntimeArguments } from "./lib/scheduler-validation-arguments.mjs";
-import { parsePreflightResult } from "./lib/scheduler-smoke-artifacts.mjs";
+import { parseEvidenceResult, parsePreflightResult } from "./lib/scheduler-smoke-artifacts.mjs";
 
 export function immutableEqual(left, right) {
   const fields = ["label", "status", "category", "reachedEndpoint"];
@@ -59,12 +59,37 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
       throw new Error("existing_negative_baseline_not_provable");
     }
+    let evidence;
+    try {
+      evidence = parseEvidenceResult({
+        result_tag: parsed.evidence_result_tag,
+        run_category: parsed.evidence_run_category,
+        new_scheduled_runs: Number(parsed.new_scheduled_runs),
+        terminal_scheduled_runs: Number(parsed.terminal_scheduled_runs),
+        running_scheduled_runs: Number(parsed.running_scheduled_runs),
+        terminal_status: parsed.terminal_status,
+        locations_total: Number(parsed.locations_total),
+        locations_succeeded: Number(parsed.locations_succeeded),
+        locations_failed: Number(parsed.locations_failed),
+        snapshots_created: Number(parsed.snapshots_created),
+        duplicate_immutable_identity_count: Number(parsed.duplicate_identity_count),
+        unexpected_active_scheduled_runs: Number(parsed.unexpected_active_scheduled_runs),
+        counter_invariant: parsed.counter_invariant === "true",
+      });
+    } catch {
+      throw new Error("manual_evidence_invalid");
+    }
+    if (evidence.newScheduledRuns !== 1 || evidence.terminalScheduledRuns !== 1
+      || evidence.runningScheduledRuns !== 0 || evidence.unexpectedActiveScheduledRuns !== 0
+      || evidence.terminalStatus === "none" || evidence.duplicateIdentityCount !== 0 || !evidence.counterInvariant) {
+      throw new Error("manual_evidence_rejected");
+    }
     const resumed = sanitizePhaseState(assertResumeInput({
       enqueueCommitted: parsed.enqueue_committed === "true",
       evidence: {
-        newScheduledRuns: Number(parsed.new_scheduled_runs),
-        duplicateIdentityCount: Number(parsed.duplicate_identity_count),
-        counterInvariant: parsed.counter_invariant === "true",
+        newScheduledRuns: evidence.newScheduledRuns,
+        duplicateIdentityCount: evidence.duplicateIdentityCount,
+        counterInvariant: evidence.counterInvariant,
       },
     }));
     await binding.cleanupArtifacts();
@@ -86,7 +111,15 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       throw new Error("manual_preflight_result_invalid");
     }
     const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
-    const negatives = await binding.runNegativeCases(preflight.endpoint, async () => {});
+    const negatives = await binding.runNegativeCases(preflight.endpoint, async (records, pendingLabel) => {
+      await binding.writePhaseState(sanitizePhaseState({
+        phase: pendingLabel ? "negative_request_in_flight" : "negative_phase_incomplete",
+        negative: records,
+        attempt_boundary: manualPreflight.attemptBoundary,
+        scheduled_run_baseline: manualPreflight.scheduledRunBaseline,
+        cleanup: "manual_intervention_required",
+      }));
+    });
     await binding.writeSqlArtifacts(preflight.linkedRef, manualPreflight.attemptBoundary, manualPreflight.scheduledRunBaseline);
     const next = sanitizePhaseState({
       phase: "manual_enqueue_required",
