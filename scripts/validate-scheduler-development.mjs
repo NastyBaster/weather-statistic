@@ -1,4 +1,4 @@
-import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState } from "./lib/scheduler-development-local-binding.mjs";
+import { assertResumeInput, createSchedulerDevelopmentLocalBinding, sanitizePhaseState, SchedulerMetadataPhaseFailure } from "./lib/scheduler-development-local-binding.mjs";
 import { isDirectEsModule } from "./lib/es-module-entrypoint.mjs";
 import { parseSchedulerRuntimeArguments } from "./lib/scheduler-validation-arguments.mjs";
 import { parseEvidenceResult, parsePreflightResult } from "./lib/scheduler-smoke-artifacts.mjs";
@@ -43,6 +43,29 @@ export async function offlineReport() {
 export function readRuntimeArgument(args, name) {
   const value = args.find((argument) => argument.startsWith(`${name}=`));
   return value?.slice(name.length + 1) || "";
+}
+
+export function sanitizeSchedulerValidationFailure(error) {
+  if (error instanceof SchedulerMetadataPhaseFailure) {
+    return {
+      category: "cli_command_failed",
+      failingPhase: error.phase ?? "unknown_metadata_phase",
+      failureCategory: error.category,
+      metadataPhases: error.records,
+      retries: 0,
+    };
+  }
+  const allowed = new Set([
+    "hybrid_live_confirmation_required",
+    "development_target_required",
+    "existing_negative_baseline_not_provable",
+    "manual_phase_state_invalid",
+    "manual_preflight_phase_state_invalid",
+    "manual_preflight_result_invalid",
+    "manual_evidence_invalid",
+    "manual_evidence_rejected",
+  ]);
+  return { category: allowed.has(error?.message) ? error.message : "scheduler_validation_failed", retries: 0 };
 }
 
 export async function runHybridDevelopment(args, binding = createSchedulerDevelopmentLocalBinding(), environment = {}) {
@@ -144,13 +167,18 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
 }
 
 if (isDirectEsModule(import.meta.url, process.argv[1])) {
-  const report = await offlineReport();
-  const parsed = parseSchedulerRuntimeArguments(process.argv.slice(2), process.env);
-  if (parsed.args.length > 0) {
-    const hybridReport = await runHybridDevelopment(parsed.args);
-    console.log(JSON.stringify(hybridReport));
-    process.exit(0);
+  try {
+    const report = await offlineReport();
+    const parsed = parseSchedulerRuntimeArguments(process.argv.slice(2), process.env);
+    if (parsed.args.length > 0) {
+      const hybridReport = await runHybridDevelopment(parsed.args);
+      console.log(JSON.stringify(hybridReport));
+      process.exit(0);
+    }
+    console.log(JSON.stringify(report));
+    process.exit(report.failed === 0 ? 0 : 1);
+  } catch (error) {
+    console.log(JSON.stringify(sanitizeSchedulerValidationFailure(error)));
+    process.exit(1);
   }
-  console.log(JSON.stringify(report));
-  process.exit(report.failed === 0 ? 0 : 1);
 }

@@ -154,7 +154,7 @@ await expectPreflight("migration_state_mismatch", { migrations: JSON.stringify({
 await expectPreflight("function_missing", { functions: JSON.stringify({ functions: [] }) });
 await expectPreflight("edge_secret_missing", { secrets: JSON.stringify({ secrets: [] }) });
 await expectPreflight("repository_not_clean", { clean: false });
-await expectPreflight("cli_json_malformed", { projects: "not-json" });
+await expectPreflight("cli_response_shape_unsupported", { projects: "not-json" });
 const redirectBinding = createSchedulerDevelopmentLocalBinding({
   fetchImpl: async () => ({ redirected: true, status: 405, json: async () => ({ error: "method_not_allowed" }) }),
 });

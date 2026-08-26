@@ -14,10 +14,79 @@ const FUNCTION_NAME = "collect-forecasts";
 const EDGE_SECRET_NAME = "FORECAST_SCHEDULER_TOKEN";
 const VAULT_SECRET_NAME = "forecast_scheduler_token";
 const SAFE_NEGATIVE_CATEGORIES = new Map([[405, "method_not_allowed"], [401, "unauthorized"]]);
+const METADATA_PHASES = Object.freeze([
+  "target_metadata_lookup",
+  "function_metadata_check",
+  "edge_secret_name_metadata_check",
+  "migration_metadata_check",
+]);
+const METADATA_PHASE_SET = new Set(METADATA_PHASES);
+const EXIT_CATEGORIES = new Set(["zero", "nonzero", "timeout", "spawn_failed", "not_attempted"]);
+const STDOUT_SHAPES = new Set(["empty", "json", "text", "unknown"]);
+const STDERR_CATEGORIES = new Set(["empty", "sanitized_error_present"]);
+const PARSER_CATEGORIES = new Set(["parsed", "empty", "unsupported_shape", "ambiguous", "not_attempted"]);
 
 const fail = (category) => {
   throw new Error(category);
 };
+
+export const schedulerCliMetadataPhases = () => [...METADATA_PHASES];
+
+function metadataRecord(phase, fields = {}) {
+  if (!METADATA_PHASE_SET.has(phase)) fail("metadata_phase_unknown");
+  const record = {
+    phase,
+    attempted: false,
+    completed: false,
+    exitCategory: "not_attempted",
+    stdoutShape: "unknown",
+    stderrCategory: "empty",
+    parserCategory: "not_attempted",
+    outcomeCategory: "not_attempted",
+    ...fields,
+  };
+  if (!EXIT_CATEGORIES.has(record.exitCategory) || !STDOUT_SHAPES.has(record.stdoutShape)
+    || !STDERR_CATEGORIES.has(record.stderrCategory) || !PARSER_CATEGORIES.has(record.parserCategory)) {
+    fail("metadata_phase_record_invalid");
+  }
+  return Object.freeze(record);
+}
+
+export function createSchedulerMetadataPhaseRecords() {
+  return Object.freeze(METADATA_PHASES.map((phase) => metadataRecord(phase)));
+}
+
+export function createSchedulerMetadataPhaseRecord(phase) {
+  return metadataRecord(phase);
+}
+
+export class SchedulerMetadataPhaseFailure extends Error {
+  constructor(category, phase, records) {
+    const knownPhase = METADATA_PHASE_SET.has(phase);
+    super(knownPhase ? category : "metadata_phase_unknown");
+    this.name = "SchedulerMetadataPhaseFailure";
+    this.category = knownPhase ? category : "metadata_phase_unknown";
+    this.phase = knownPhase ? phase : undefined;
+    this.records = Object.freeze(records.map((record) => Object.freeze({ ...record })));
+  }
+}
+
+function cliFailureExitCategory(error) {
+  if (error?.message === "cli_timeout") return "timeout";
+  if (error?.message === "cli_unavailable") return "spawn_failed";
+  return "nonzero";
+}
+
+function stdoutShape(stdout) {
+  if (typeof stdout !== "string") return "unknown";
+  if (stdout.trim() === "") return "empty";
+  try {
+    const parsed = JSON.parse(stdout);
+    return parsed !== null && typeof parsed === "object" ? "json" : "text";
+  } catch {
+    return "text";
+  }
+}
 
 export function parseCliJsonEnvelope(stdout) {
   try {
@@ -63,17 +132,29 @@ export function createSubprocessRunner({ executable = "supabase", timeoutMs = 30
     const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const rejectSanitized = (category) => {
+      if (settled) return;
+      settled = true;
+      const error = new Error(category);
+      error.stderrCategory = stderr === "" ? "empty" : "sanitized_error_present";
+      reject(error);
+    };
     const timeout = setTimeout(() => {
       child.kill();
-      reject(new Error("cli_timeout"));
+      rejectSanitized("cli_timeout");
     }, timeoutMs);
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", () => { clearTimeout(timeout); reject(new Error("cli_unavailable")); });
+    child.on("error", () => { clearTimeout(timeout); rejectSanitized("cli_unavailable"); });
     child.on("close", (code) => {
       clearTimeout(timeout);
-      if (code !== 0) reject(new Error("cli_command_failed"));
-      else resolve(stdout);
+      if (settled) return;
+      if (code !== 0) rejectSanitized("cli_command_failed");
+      else {
+        settled = true;
+        resolve(Object.freeze({ stdout, stderrCategory: stderr === "" ? "empty" : "sanitized_error_present" }));
+      }
     });
   });
 }
@@ -109,35 +190,85 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
 
-  async function cliJson(args) {
-    return parseCliJsonEnvelope(await runCli(args));
+  async function runMetadataPreflightPhase(records, phase, args, listKeys) {
+    if (!METADATA_PHASE_SET.has(phase)) fail("metadata_phase_unknown");
+    const index = METADATA_PHASES.indexOf(phase);
+    const replace = (fields) => { records[index] = metadataRecord(phase, fields); };
+    let execution;
+    try {
+      execution = await runCli(args);
+    } catch (error) {
+      const exitCategory = cliFailureExitCategory(error);
+      const category = exitCategory === "timeout" ? "cli_timeout" : exitCategory === "spawn_failed" ? "cli_unavailable" : "cli_command_failed";
+      replace({
+        attempted: true,
+        completed: true,
+        exitCategory,
+        stdoutShape: "unknown",
+        stderrCategory: error?.stderrCategory === "sanitized_error_present" ? "sanitized_error_present" : "empty",
+        parserCategory: "not_attempted",
+        outcomeCategory: category,
+      });
+      throw new SchedulerMetadataPhaseFailure(category, phase, records);
+    }
+    const stdout = typeof execution === "string" ? execution : execution?.stdout;
+    const stderrCategory = execution?.stderrCategory === "sanitized_error_present" ? "sanitized_error_present" : "empty";
+    const shape = stdoutShape(stdout);
+    if (shape === "empty") {
+      replace({ attempted: true, completed: true, exitCategory: "zero", stdoutShape: shape, stderrCategory, parserCategory: "empty", outcomeCategory: "cli_response_empty" });
+      throw new SchedulerMetadataPhaseFailure("cli_response_empty", phase, records);
+    }
+    let envelope;
+    try {
+      envelope = parseCliJsonEnvelope(stdout);
+    } catch {
+      replace({ attempted: true, completed: true, exitCategory: "zero", stdoutShape: shape, stderrCategory, parserCategory: "unsupported_shape", outcomeCategory: "cli_response_shape_unsupported" });
+      throw new SchedulerMetadataPhaseFailure("cli_response_shape_unsupported", phase, records);
+    }
+    let entries;
+    try {
+      entries = listFromEnvelope(envelope, listKeys);
+    } catch {
+      replace({ attempted: true, completed: true, exitCategory: "zero", stdoutShape: shape, stderrCategory, parserCategory: "unsupported_shape", outcomeCategory: "cli_response_shape_unsupported" });
+      throw new SchedulerMetadataPhaseFailure("cli_response_shape_unsupported", phase, records);
+    }
+    replace({ attempted: true, completed: true, exitCategory: "zero", stdoutShape: shape, stderrCategory, parserCategory: "parsed", outcomeCategory: "success" });
+    return entries;
+  }
+
+  function rejectMetadataSemanticFailure(records, phase, category, parserCategory = "parsed") {
+    if (!METADATA_PHASE_SET.has(phase)) fail("metadata_phase_unknown");
+    const index = METADATA_PHASES.indexOf(phase);
+    records[index] = metadataRecord(phase, { ...records[index], parserCategory, outcomeCategory: category });
+    throw new SchedulerMetadataPhaseFailure(category, phase, records);
   }
 
   async function preflight({ expectedDevelopment, expectedProduction }) {
     if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) fail("development_target_required");
     if (!(await repositoryClean())) fail("repository_not_clean");
-    const [projectEnvelope, functionEnvelope, secretEnvelope, linkedRef] = await Promise.all([
-      cliJson(["projects", "list", "--output-format", "json"]),
-      cliJson(["functions", "list", "--output-format", "json"]),
-      cliJson(["secrets", "list", "--output-format", "json"]),
-      readLinkedRef(),
-    ]);
-    const projects = listFromEnvelope(projectEnvelope, ["projects", "data"]);
-    const functions = listFromEnvelope(functionEnvelope, ["functions", "data"]);
-    const secrets = listFromEnvelope(secretEnvelope, ["secrets", "data"]);
+    const records = [...createSchedulerMetadataPhaseRecords()];
+    const projects = await runMetadataPreflightPhase(records, "target_metadata_lookup", ["projects", "list", "--output-format", "json"], ["projects", "data"]);
+    let linkedRef;
+    try {
+      linkedRef = await readLinkedRef();
+    } catch {
+      rejectMetadataSemanticFailure(records, "target_metadata_lookup", "linked_context_unavailable");
+    }
     const development = projects.filter((project) => project.name === expectedDevelopment);
-    if (development.length !== 1 || development[0].ref !== linkedRef) fail("target_verification_failed");
-    if (projects.some((project) => project.name === expectedProduction && project.ref === linkedRef)) fail("production_target_refused");
-    if (!functions.some((entry) => entry.name === FUNCTION_NAME)) fail("function_missing");
-    if (!secrets.some((entry) => entry.name === EDGE_SECRET_NAME)) fail("edge_secret_missing");
-    const migrationEnvelope = await cliJson(["migration", "list", "--linked", "--output-format", "json"]);
-    const migrationRows = listFromEnvelope(migrationEnvelope, ["migrations", "data"]);
+    if (development.length !== 1) rejectMetadataSemanticFailure(records, "target_metadata_lookup", "target_verification_failed", development.length > 1 ? "ambiguous" : "parsed");
+    if (development[0].ref !== linkedRef) rejectMetadataSemanticFailure(records, "target_metadata_lookup", "target_verification_failed");
+    if (projects.some((project) => project.name === expectedProduction && project.ref === linkedRef)) rejectMetadataSemanticFailure(records, "target_metadata_lookup", "production_target_refused");
+    const functions = await runMetadataPreflightPhase(records, "function_metadata_check", ["functions", "list", "--output-format", "json"], ["functions", "data"]);
+    if (!functions.some((entry) => entry.name === FUNCTION_NAME)) rejectMetadataSemanticFailure(records, "function_metadata_check", "function_missing");
+    const secrets = await runMetadataPreflightPhase(records, "edge_secret_name_metadata_check", ["secrets", "list", "--output-format", "json"], ["secrets", "data"]);
+    if (!secrets.some((entry) => entry.name === EDGE_SECRET_NAME)) rejectMetadataSemanticFailure(records, "edge_secret_name_metadata_check", "edge_secret_missing");
+    const migrationRows = await runMetadataPreflightPhase(records, "migration_metadata_check", ["migration", "list", "--linked", "--output-format", "json"], ["migrations", "data"]);
     const present = (value) => value !== undefined && value !== null && value !== "" && value !== false;
     const local = migrationRows.filter((row) => present(row.local ?? row.LOCAL) && !present(row.remote ?? row.REMOTE)).length;
     const remote = migrationRows.filter((row) => present(row.remote ?? row.REMOTE) && !present(row.local ?? row.LOCAL)).length;
     const applied = migrationRows.filter((row) => present(row.local ?? row.LOCAL) && present(row.remote ?? row.REMOTE)).length;
-    if (applied !== 6 || local !== 0 || remote !== 0) fail("migration_state_mismatch");
-    return Object.freeze({ linkedRef, endpoint: new URL(`/functions/v1/${FUNCTION_NAME}`, `https://${linkedRef}.supabase.co`).toString(), target: "verified", migrations: "6/6/0/0" });
+    if (applied !== 6 || local !== 0 || remote !== 0) rejectMetadataSemanticFailure(records, "migration_metadata_check", "migration_state_mismatch");
+    return Object.freeze({ linkedRef, endpoint: new URL(`/functions/v1/${FUNCTION_NAME}`, `https://${linkedRef}.supabase.co`).toString(), target: "verified", migrations: "6/6/0/0", metadataPhases: Object.freeze(records.map((record) => Object.freeze({ ...record }))) });
   }
 
   async function runNegativeCases(endpoint, save = async () => {}) {
