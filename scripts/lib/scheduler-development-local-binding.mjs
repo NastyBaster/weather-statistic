@@ -261,8 +261,15 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   async function consumeNegativeEvidenceState() {
     await acquireResumeClaim();
     let state;
-    try { state = await readPhaseState(); } catch (error) { throw error; }
-    if (state.phase !== "read_only_negative_evidence_required") fail("negative_evidence_state_consume_failed");
+    try { state = await readPhaseState(); }
+    catch (error) {
+      try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      fail("negative_evidence_state_consume_failed");
+    }
+    if (state.phase !== "read_only_negative_evidence_required") {
+      try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      fail("negative_evidence_state_consume_failed");
+    }
     const consumedPath = join(temporaryDirectory, "scheduler-phase-state.consumed");
     try {
       await filesystem.rename(phaseStatePath, consumedPath);

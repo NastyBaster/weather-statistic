@@ -24,4 +24,17 @@ await assert.rejects(reset.prepareAttempt(), /scheduler_resume_claim_active/);
 assert.equal(files.has("scheduler-resume-claim"), true);
 assert.equal(resetDeletes.length, 0);
 assert.equal(JSON.stringify([...files]).includes("C:/"), false);
-console.log("scheduler resume claim: 5 fixtures, 0 failed, 0 skipped, 0 not-run");
+const failureFiles = new Set(), failureCalls = { release: 0, move: 0 };
+const failureFs = {
+  async mkdir(path) { if (path.endsWith("scheduler-resume-claim")) failureFiles.add("scheduler-resume-claim"); },
+  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.endsWith("scheduler-resume-claim") }; },
+  async rename() { failureCalls.move += 1; },
+  async writeFile() {},
+  async rmdir() { failureCalls.release += 1; failureFiles.delete("scheduler-resume-claim"); },
+};
+const readFailure = createSchedulerDevelopmentLocalBinding({ filesystem: failureFs, temporaryDirectory: "C:/validation", readPhaseState: async () => { throw new Error("state_read_failed"); } });
+await assert.rejects(readFailure.consumeNegativeEvidenceState(), /negative_evidence_state_consume_failed/);
+assert.equal(failureCalls.release, 1);
+assert.equal(failureCalls.move, 0);
+assert.equal(failureFiles.has("scheduler-resume-claim"), false);
+console.log("scheduler resume claim: 8 fixtures, 0 failed, 0 skipped, 0 not-run");
