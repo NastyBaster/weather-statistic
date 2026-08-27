@@ -84,6 +84,12 @@ evidence is retained, write-capable artifacts are removed, and a new authorizati
 baseline is required. An old SQL Editor tab cannot be closed by the CLI, so users must never run
 an old tab; the in-database guards remain the final protection. Production is unsupported.
 
+Terminalization first atomically invalidates the resumable state and leaves a minimal tombstone;
+cleanup and detailed terminal-state persistence happen only afterward. Thus persistence or cleanup
+failures remain non-resumable and use the sanitized `validation_artifact_cleanup_failed` category
+when applicable. Manual intervention and a new authorized attempt with a new baseline are required;
+no live validation occurred in this correction.
+
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
 fix does not execute a live validation or alter the scheduler contract.

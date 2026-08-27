@@ -190,7 +190,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
-  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
+  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
   const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
 
   async function removeArtifacts(names) {
@@ -220,6 +220,18 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function clearWriteArtifacts() {
     await removeArtifacts(writeArtifactNames);
+  }
+
+  async function invalidatePhaseState(expectedState) {
+    if (!expectedState || expectedState.phase !== "read_only_negative_evidence_required") fail("negative_evidence_terminalization_failed");
+    await filesystem.rename(phaseStatePath, join(temporaryDirectory, "scheduler-phase-state.invalidated"));
+    try {
+      await filesystem.writeFile(`${phaseStatePath}.tmp`, JSON.stringify({ phase: "negative_evidence_terminalizing", cleanup: "terminal" }), { encoding: "utf8", mode: 0o600 });
+      await filesystem.rename(`${phaseStatePath}.tmp`, phaseStatePath);
+    } catch {
+      // A missing state file is itself non-resumable; do not restore the old state.
+      throw new Error("negative_evidence_terminalization_failed");
+    }
   }
 
   async function runMetadataPreflightPhase(records, phase, args, listKeys) {
@@ -374,7 +386,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "negative_evidence_terminalizing", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
@@ -390,5 +402,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     }
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts, invalidatePhaseState };
 }
