@@ -127,7 +127,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       if (typeof binding.consumeNegativeEvidenceState === "function") { state = await binding.consumeNegativeEvidenceState(); consumed = true; }
       else state = await binding.readPhaseState();
     } catch (error) {
-      if (error?.message === "negative_evidence_state_consume_failed") throw error;
+      if (new Set(["negative_evidence_state_consume_failed", "scheduler_resume_claim_release_failed"]).has(error?.message)) throw error;
       throw new Error("negative_evidence_state_consume_failed");
     }
     if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") return sanitizePhaseState(state);

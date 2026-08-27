@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createSchedulerDevelopmentLocalBinding } from "../scripts/lib/scheduler-development-local-binding.mjs";
-import { runHybridDevelopment } from "../scripts/validate-scheduler-development.mjs";
+import { runHybridDevelopment, sanitizeSchedulerValidationFailure } from "../scripts/validate-scheduler-development.mjs";
 
 const boundary = "2026-01-01T00:00:00Z";
 const args = ["--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--development-name=development", "--production-name=production"];
@@ -53,6 +53,17 @@ async function invariant4FailedPreConsumeRelease() {
   const { fs, binding } = await consumeScenario(async () => { throw new Error("state read failure"); }, error);
   await assert.rejects(binding.consumeNegativeEvidenceState(), /scheduler_resume_claim_release_failed/);
   assert.equal(fs.files.has("scheduler-resume-claim"), true); assert.equal(fs.calls.rmdir, 1); assert.equal(fs.calls.move, 0);
+  let parserCalls = 0, artifactCalls = 0;
+  const orchestration = {
+    async readPhaseState() { return resumable; },
+    async consumeNegativeEvidenceState() { throw new Error("scheduler_resume_claim_release_failed"); },
+    async parseEvidence() { parserCalls += 1; },
+    async writeSqlArtifacts() { artifactCalls += 1; },
+  };
+  await assert.rejects(runHybridDevelopment(evidenceArgs, orchestration), /scheduler_resume_claim_release_failed/);
+  const rendered = sanitizeSchedulerValidationFailure(new Error("scheduler_resume_claim_release_failed"));
+  assert.equal(rendered.category, "scheduler_resume_claim_release_failed");
+  assert.equal(parserCalls, 0); assert.equal(artifactCalls, 0); assert.equal(JSON.stringify(rendered).includes("filesystem"), false);
 }
 
 function committedBinding({ releaseError = new Error("release failure") } = {}) {
