@@ -24,6 +24,9 @@ await assert.rejects(reset.prepareAttempt(), /scheduler_resume_claim_active/);
 assert.equal(files.has("scheduler-resume-claim"), true);
 assert.equal(resetDeletes.length, 0);
 assert.equal(JSON.stringify([...files]).includes("C:/"), false);
+const cleanup = createSchedulerDevelopmentLocalBinding({ filesystem: fs, temporaryDirectory: "C:/validation" });
+await assert.rejects(cleanup.cleanupArtifacts(), /scheduler_resume_claim_active/);
+assert.equal(resetDeletes.length, 0);
 const failureFiles = new Set(), failureCalls = { release: 0, move: 0 };
 const failureFs = {
   async mkdir(path) { if (path.endsWith("scheduler-resume-claim")) failureFiles.add("scheduler-resume-claim"); },
@@ -37,4 +40,4 @@ await assert.rejects(readFailure.consumeNegativeEvidenceState(), /negative_evide
 assert.equal(failureCalls.release, 1);
 assert.equal(failureCalls.move, 0);
 assert.equal(failureFiles.has("scheduler-resume-claim"), false);
-console.log("scheduler resume claim: 8 fixtures, 0 failed, 0 skipped, 0 not-run");
+console.log("scheduler resume claim: 9 fixtures, 0 failed, 0 skipped, 0 not-run");

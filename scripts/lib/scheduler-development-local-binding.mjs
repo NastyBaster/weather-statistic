@@ -438,13 +438,21 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function cleanupArtifacts() {
+    let rootExists = true;
     try {
+      if (typeof filesystem.lstat === "function") {
+        try { const rootStat = await filesystem.lstat(temporaryDirectory); if (rootStat.isSymbolicLink?.() || !rootStat.isDirectory?.()) fail("validation_artifact_path_unsafe"); }
+        catch (error) { if (error?.code === "ENOENT") { rootExists = false; } else throw error; }
+      }
+      if (!rootExists) return;
+      if (!resumeClaimHeld) await acquireResumeClaim("scheduler_resume_claim_active");
       await removeArtifacts(artifactNames);
+      await releaseResumeClaim();
       if (typeof filesystem.rmdir === "function") await filesystem.rmdir(temporaryDirectory);
       else await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
     } catch (error) {
       if (error?.code === "ENOENT") return;
-      if (error?.message === "validation_artifact_path_unsafe") throw error;
+      if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error;
       fail("validation_artifact_cleanup_failed");
     }
   }
