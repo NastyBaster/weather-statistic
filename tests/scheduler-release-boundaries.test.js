@@ -151,6 +151,24 @@ async function unsafePathTerminalizationCategory() {
   assert.equal(JSON.stringify(rendered).includes("C:/"), false);
 }
 
+async function unsafePathPublicationCleanupCategory() {
+  const calls = { clears: 0, writes: 0 };
+  const binding = {
+    async readPhaseState() { return resumable; },
+    async consumeNegativeEvidenceState() { return resumable; },
+    async preflight() { return { linkedRef: "synthetic-ref" }; },
+    async writeSqlArtifacts() { calls.writes += 1; throw new Error("publication failure"); },
+    async clearWriteArtifacts() { calls.clears += 1; throw new Error("validation_artifact_path_unsafe"); },
+    async writePhaseState() {},
+    async releaseResumeClaim() {},
+  };
+  await assert.rejects(runHybridDevelopment(evidenceArgs, binding), /validation_artifact_path_unsafe/);
+  assert.equal(calls.writes, 1); assert.equal(calls.clears, 1);
+  const rendered = sanitizeSchedulerValidationFailure(new Error("validation_artifact_path_unsafe"));
+  assert.equal(rendered.category, "validation_artifact_path_unsafe");
+  assert.equal(JSON.stringify(rendered).includes("C:/"), false);
+}
+
 await invariant1PreConsumeReadFailure();
 await invariant2PreConsumePhaseValidationFailure();
 await invariant3SuccessfulPreConsumeRelease();
@@ -164,4 +182,5 @@ await invariant10FinallyPreservesCommit();
 await invariant11NoDuplicatePublication();
 await invariant12NoAutomaticReleaseRetry();
 await unsafePathTerminalizationCategory();
+await unsafePathPublicationCleanupCategory();
 console.log("scheduler release boundaries: 12 invariants, 12 passed, 0 failed, 0 skipped, 0 not-run");

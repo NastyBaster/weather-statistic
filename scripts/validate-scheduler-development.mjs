@@ -170,7 +170,11 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       statePersisted = true;
     } catch (error) {
       if (!statePersisted) {
-        try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); } catch { throw new Error("validation_artifact_cleanup_failed"); }
+        try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
+        catch (cleanupError) {
+          if (cleanupError?.message === "validation_artifact_path_unsafe") throw cleanupError;
+          throw new Error("validation_artifact_cleanup_failed");
+        }
       }
       if (error?.message === "validation_artifact_cleanup_failed") throw error;
       throw new Error("scheduler_artifact_publication_failed");
