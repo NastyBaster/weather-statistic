@@ -76,9 +76,13 @@ The manual boundary is ordered and mandatory: prepare and run the read-only pref
 authorize the four negative requests, then run the distinct read-only negative-evidence artifact.
 Only a parsed zero-run/zero-active result for the same durable boundary enables preparation of the
 exactly-once enqueue and post-enqueue evidence artifacts. Negative completion never creates enqueue
-artifacts, and negative requests or enqueue are never repeated automatically. A failed or ambiguous
-negative-evidence result remains terminal until a new explicitly authorized attempt; production is
-unsupported.
+artifacts, and negative requests or enqueue are never repeated automatically. Artifacts are scoped
+to one attempt and phase: stale write-capable files and partial files are removed before a new
+attempt and before the negative-evidence gate, and cleanup failure blocks progress. A failed or
+ambiguous negative-evidence result is persisted as a non-resumable terminal state; its earlier
+evidence is retained, write-capable artifacts are removed, and a new authorization plus durable
+baseline is required. An old SQL Editor tab cannot be closed by the CLI, so users must never run
+an old tab; the in-database guards remain the final protection. Production is unsupported.
 
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility

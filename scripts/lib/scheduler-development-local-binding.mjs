@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -110,7 +110,7 @@ export function immutableNegativeRecords(records) {
 }
 
 export function sanitizePhaseState(state) {
-  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed"];
+  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed", "negative_evidence_failure"];
   const output = {};
   for (const key of allowed) if (key in state) output[key] = state[key];
   return JSON.parse(JSON.stringify(output));
@@ -187,9 +187,36 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const readLinkedRef = dependencies.readLinkedRef ?? (() => readFile("supabase/.temp/project-ref", "utf8").then((value) => value.trim()));
   const repositoryClean = dependencies.repositoryClean ?? createRepositoryCleanReader();
   const readPersistedPhaseState = dependencies.readPhaseState ?? ((path) => readFile(path, "utf8").then(JSON.parse));
-  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm };
+  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
+  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
+  const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
+
+  async function removeArtifacts(names) {
+    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    const entries = typeof filesystem.readdir === "function" ? await filesystem.readdir(temporaryDirectory) : [];
+    for (const entry of entries) {
+      const name = typeof entry === "string" ? entry : entry.name;
+      if (!artifactNames.has(name)) fail("validation_artifact_path_unsafe");
+      if (!names.has(name)) continue;
+      const path = join(temporaryDirectory, name);
+      if (typeof filesystem.lstat === "function") {
+        const stat = await filesystem.lstat(path);
+        if (stat.isSymbolicLink?.() || stat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+      }
+      if (typeof filesystem.unlink === "function") await filesystem.unlink(path);
+      else await filesystem.rm(path, { force: true });
+    }
+  }
+
+  async function prepareAttempt() {
+    await removeArtifacts(artifactNames);
+  }
+
+  async function clearWriteArtifacts() {
+    await removeArtifacts(writeArtifactNames);
+  }
 
   async function runMetadataPreflightPhase(records, phase, args, listKeys) {
     if (!METADATA_PHASE_SET.has(phase)) fail("metadata_phase_unknown");
@@ -326,7 +353,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   async function writeNegativeEvidenceArtifact(attemptBoundary, scheduledRunBaseline) {
     requireAttemptBoundary(attemptBoundary);
     requireBaseline(scheduledRunBaseline);
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await clearWriteArtifacts();
     const path = join(temporaryDirectory, "scheduler-negative-evidence.sql");
     const staged = `${path}.tmp`;
     await filesystem.writeFile(staged, buildNegativeEvidenceSql(attemptBoundary, scheduledRunBaseline), { encoding: "utf8", mode: 0o600 });
@@ -343,13 +370,14 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required"].includes(state.phase)) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
   async function cleanupArtifacts() {
-    await filesystem.rm(temporaryDirectory, { recursive: true, force: true });
+    await removeArtifacts(artifactNames);
+    await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts };
 }
