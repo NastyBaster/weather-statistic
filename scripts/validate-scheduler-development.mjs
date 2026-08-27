@@ -90,9 +90,9 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   const expectedProduction = parsed.production_name;
   if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
 
-  const terminalizeNegativeEvidence = async (state, category) => {
+  const terminalizeNegativeEvidence = async (state, category, alreadyConsumed = false) => {
     try {
-      if (typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
+      if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
       if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts();
       await binding.writePhaseState(sanitizePhaseState({
         phase: "negative_evidence_failed_terminal",
@@ -109,7 +109,15 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   };
 
   if (parsed.resume_negative_evidence) {
-    const state = await binding.readPhaseState();
+    let state;
+    let consumed = false;
+    try {
+      if (typeof binding.consumeNegativeEvidenceState === "function") { state = await binding.consumeNegativeEvidenceState(); consumed = true; }
+      else state = await binding.readPhaseState();
+    } catch (error) {
+      if (error?.message === "negative_evidence_state_consume_failed") throw error;
+      throw new Error("negative_evidence_state_consume_failed");
+    }
     if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") throw new Error("negative_evidence_failed_terminal");
     if (state.phase !== "read_only_negative_evidence_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
       throw new Error("negative_evidence_missing");
@@ -125,12 +133,12 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         negative_created_runs: Number(parsed.negative_evidence_created_runs),
       }]);
     } catch (error) {
-      await terminalizeNegativeEvidence(state, error.message === "negative_evidence_sensitive_output" ? error.message : "negative_evidence_parser_failure");
+      await terminalizeNegativeEvidence(state, error.message === "negative_evidence_sensitive_output" ? error.message : "negative_evidence_parser_failure", consumed);
     }
-    if (evidence.attemptBoundary !== state.attempt_boundary) await terminalizeNegativeEvidence(state, "negative_evidence_attempt_mismatch");
-    if (evidence.scheduledRunBaseline !== state.scheduled_run_baseline) await terminalizeNegativeEvidence(state, "negative_evidence_baseline_mismatch");
-    if (evidence.newScheduledRuns !== 0 || evidence.negativeCreatedRuns !== 0) await terminalizeNegativeEvidence(state, "negative_runs_created");
-    if (evidence.activeScheduledRuns !== 0) await terminalizeNegativeEvidence(state, "active_scheduled_run_detected");
+    if (evidence.attemptBoundary !== state.attempt_boundary) await terminalizeNegativeEvidence(state, "negative_evidence_attempt_mismatch", consumed);
+    if (evidence.scheduledRunBaseline !== state.scheduled_run_baseline) await terminalizeNegativeEvidence(state, "negative_evidence_baseline_mismatch", consumed);
+    if (evidence.newScheduledRuns !== 0 || evidence.negativeCreatedRuns !== 0) await terminalizeNegativeEvidence(state, "negative_runs_created", consumed);
+    if (evidence.activeScheduledRuns !== 0) await terminalizeNegativeEvidence(state, "active_scheduled_run_detected", consumed);
     const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
     await binding.writeSqlArtifacts(preflight.linkedRef, state.attempt_boundary, state.scheduled_run_baseline);
     await binding.writePhaseState(sanitizePhaseState({

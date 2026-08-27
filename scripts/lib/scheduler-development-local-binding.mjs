@@ -190,7 +190,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
-  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
+  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
   const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
 
   async function removeArtifacts(names) {
@@ -215,11 +215,11 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function prepareAttempt() {
-    await removeArtifacts(artifactNames);
+    try { await removeArtifacts(artifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
-    await removeArtifacts(writeArtifactNames);
+    try { await removeArtifacts(writeArtifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function invalidatePhaseState(expectedState) {
@@ -232,6 +232,20 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       // A missing state file is itself non-resumable; do not restore the old state.
       throw new Error("negative_evidence_terminalization_failed");
     }
+  }
+
+  async function consumeNegativeEvidenceState() {
+    const state = await readPhaseState();
+    if (state.phase !== "read_only_negative_evidence_required") fail("negative_evidence_state_consume_failed");
+    const consumedPath = join(temporaryDirectory, "scheduler-phase-state.consumed");
+    try {
+      await filesystem.rename(phaseStatePath, consumedPath);
+      await filesystem.writeFile(`${phaseStatePath}.tmp`, JSON.stringify({ phase: "negative_evidence_terminalizing", cleanup: "terminal" }), { encoding: "utf8", mode: 0o600 });
+      await filesystem.rename(`${phaseStatePath}.tmp`, phaseStatePath);
+    } catch {
+      throw new Error("negative_evidence_state_consume_failed");
+    }
+    return state;
   }
 
   async function runMetadataPreflightPhase(records, phase, args, listKeys) {
@@ -402,5 +416,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     }
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts, invalidatePhaseState };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState };
 }

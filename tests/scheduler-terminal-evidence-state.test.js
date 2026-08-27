@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { runHybridDevelopment } from "../scripts/validate-scheduler-development.mjs";
+import { runHybridDevelopment, sanitizeSchedulerValidationFailure } from "../scripts/validate-scheduler-development.mjs";
 
 const args = ["--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--development-name=development", "--production-name=production", "--resume-after-negative-evidence", "--negative-evidence-result-tag=scheduler_smoke_negative_evidence", "--negative-evidence-attempt-boundary=2026-01-01T00:00:00Z", "--negative-evidence-baseline=0", "--negative-evidence-new-runs=1", "--negative-evidence-active-runs=0", "--negative-evidence-created-runs=1"];
 function binding() { const b = { state: { phase: "read_only_negative_evidence_required", negative: [{ label: "A", status: 405, category: "method_not_allowed" }], attempt_boundary: "2026-01-01T00:00:00Z", scheduled_run_baseline: 0 }, writes: [], clears: 0,
@@ -27,4 +27,10 @@ await assert.rejects(runHybridDevelopment(args.map((x) => x.replace("new-runs=1"
 const invalidateFail = binding(); invalidateFail.invalidatePhaseState = async () => { throw new Error("rename"); };
 await assert.rejects(runHybridDevelopment(args, invalidateFail), /negative_evidence_terminalization_failed/);
 assert.equal(invalidateFail.clears, 0);
-console.log("scheduler terminal evidence state: 10 fixtures, 0 failed, 0 skipped, 0 not-run");
+const consumeFail = binding(); let parsedAfterConsumeFailure = false;
+consumeFail.consumeNegativeEvidenceState = async () => { throw new Error("rename"); };
+consumeFail.writePhaseState = async () => { parsedAfterConsumeFailure = true; };
+await assert.rejects(runHybridDevelopment(args, consumeFail), /negative_evidence_state_consume_failed/);
+assert.equal(parsedAfterConsumeFailure, false);
+assert.equal(sanitizeSchedulerValidationFailure(new Error("validation_artifact_cleanup_failed")).category, "validation_artifact_cleanup_failed");
+console.log("scheduler terminal evidence state: 12 fixtures, 0 failed, 0 skipped, 0 not-run");

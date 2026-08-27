@@ -90,6 +90,11 @@ failures remain non-resumable and use the sanitized `validation_artifact_cleanup
 when applicable. Manual intervention and a new authorized attempt with a new baseline are required;
 no live validation occurred in this correction.
 
+On resume, the negative-evidence state is exclusively consumed before submitted evidence is parsed.
+If that consume operation fails, no evidence is accepted or persisted and no artifact is generated;
+the original state remains available for a separately authorized recovery. Once consumed, the
+resumable state is never restored, including across cleanup or persistence failures.
+
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
 fix does not execute a live validation or alter the scheduler contract.
