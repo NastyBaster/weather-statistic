@@ -227,41 +227,60 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   }
 
   if (parsed.resume_preflight) {
-    const state = await binding.readPhaseState();
-    if (state.phase !== "read_only_preflight_required") throw new Error("manual_preflight_phase_state_invalid");
-    let manualPreflight;
+    let claimed = false;
+    let committed = false;
     try {
-      manualPreflight = parsePreflightResult({
-        result_tag: "scheduler_smoke_preflight",
-        attempt_boundary: parsed.attempt_boundary,
-        scheduled_run_baseline: Number(parsed.scheduled_run_baseline),
-        negative_baseline_status: "baseline_established_before_negative_phase",
+      if (typeof binding.acquireResumeClaim === "function") {
+        await binding.acquireResumeClaim("scheduler_resume_claim_active");
+        claimed = true;
+      }
+      const state = await binding.readPhaseState();
+      if (state.phase !== "read_only_preflight_required") throw new Error("manual_preflight_phase_state_invalid");
+      let manualPreflight;
+      try {
+        manualPreflight = parsePreflightResult({
+          result_tag: "scheduler_smoke_preflight",
+          attempt_boundary: parsed.attempt_boundary,
+          scheduled_run_baseline: Number(parsed.scheduled_run_baseline),
+          negative_baseline_status: "baseline_established_before_negative_phase",
+        });
+      } catch {
+        throw new Error("manual_preflight_result_invalid");
+      }
+      const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
+      if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts();
+      const negatives = await binding.runNegativeCases(preflight.endpoint, async (records, pendingLabel) => {
+        await binding.writePhaseState(sanitizePhaseState({
+          phase: pendingLabel ? "negative_request_in_flight" : "negative_phase_incomplete",
+          negative: records,
+          attempt_boundary: manualPreflight.attemptBoundary,
+          scheduled_run_baseline: manualPreflight.scheduledRunBaseline,
+          cleanup: "manual_intervention_required",
+        }));
       });
-    } catch {
-      throw new Error("manual_preflight_result_invalid");
-    }
-    const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
-    if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts();
-    const negatives = await binding.runNegativeCases(preflight.endpoint, async (records, pendingLabel) => {
-      await binding.writePhaseState(sanitizePhaseState({
-        phase: pendingLabel ? "negative_request_in_flight" : "negative_phase_incomplete",
-        negative: records,
+      await binding.writeNegativeEvidenceArtifact(manualPreflight.attemptBoundary, manualPreflight.scheduledRunBaseline);
+      const next = sanitizePhaseState({
+        phase: "read_only_negative_evidence_required",
+        negative: negatives,
+        negative_evidence_required: true,
         attempt_boundary: manualPreflight.attemptBoundary,
         scheduled_run_baseline: manualPreflight.scheduledRunBaseline,
-        cleanup: "manual_intervention_required",
-      }));
-    });
-    await binding.writeNegativeEvidenceArtifact(manualPreflight.attemptBoundary, manualPreflight.scheduledRunBaseline);
-    const next = sanitizePhaseState({
-      phase: "read_only_negative_evidence_required",
-      negative: negatives,
-      negative_evidence_required: true,
-      attempt_boundary: manualPreflight.attemptBoundary,
-      scheduled_run_baseline: manualPreflight.scheduledRunBaseline,
-      cleanup: "after_manual_evidence",
-    });
-    await binding.writePhaseState(next);
-    return next;
+        cleanup: "after_manual_evidence",
+      });
+      await binding.writePhaseState(next);
+      committed = true;
+      if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+      return next;
+    } catch (error) {
+      if (claimed && !committed) {
+        try { await binding.releaseResumeClaim(); }
+        catch (releaseError) {
+          if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
+          throw new Error("scheduler_resume_claim_release_failed");
+        }
+      }
+      throw error;
+    }
   }
 
   if (typeof binding.prepareAttempt === "function") await binding.prepareAttempt();
