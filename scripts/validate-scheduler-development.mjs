@@ -77,6 +77,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "negative_evidence_terminalization_failed",
     "negative_evidence_state_consume_failed",
     "validation_artifact_cleanup_failed",
+    "scheduler_resume_claim_active",
     "scheduler_artifact_publication_failed",
     "validation_artifact_path_unsafe",
   ]);

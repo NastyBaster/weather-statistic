@@ -221,7 +221,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (resumeClaimHeld) fail("validation_artifact_cleanup_failed");
       await removeArtifacts(artifactNames);
       await removeRetainedClaim();
-    } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; if (error?.message === "validation_artifact_cleanup_failed") throw error; fail("validation_artifact_cleanup_failed"); }
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
@@ -232,11 +232,11 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
     let stat;
     try { stat = await filesystem.lstat(claimPath); } catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
+    // A claim's existence is the exclusive ownership signal.  A reset has no
+    // ownership capability, so even an empty claim is active/ambiguous and is
+    // preserved for explicit recovery rather than risking another worker.
     if (stat.isSymbolicLink?.() || !stat.isDirectory?.()) fail("validation_artifact_cleanup_failed");
-    const entries = await filesystem.readdir(claimPath);
-    if (entries.length > 0) fail("validation_artifact_cleanup_failed");
-    try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(claimPath); else await filesystem.rm(claimPath, { recursive: false, force: true }); }
-    catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
+    fail("scheduler_resume_claim_active");
   }
 
   async function invalidatePhaseState(expectedState) {

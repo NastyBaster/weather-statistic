@@ -97,9 +97,11 @@ resumable state is never restored, including across cleanup or persistence failu
 
 The exclusive resume claim is part of the attempt-scoped artifact lifecycle. It is acquired without
 clobbering before state read or evidence parsing; concurrent losers and ambiguous/stale claims fail
-closed. An explicitly authorized new-attempt reset may remove only a safely inspected, empty prior
-claim directory with `rmdir`, never recursively or through a symlink/reparse point. Active claims
-are released only after the forward state and complete artifact set are durable.
+closed. Ordinary reset has no owner capability: an existing claim (even an empty directory) is
+preserved and reported as an active/ambiguous claim. Only the owning transition may release it with
+`rmdir`, after the forward state and complete artifact set are durable; stale or crashed claims
+require explicit manual recovery and are never removed automatically. Cleanup never recurses or
+follows a symlink/reparse point.
 
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
