@@ -87,6 +87,13 @@ compatibility path that converts post-separator options into npm config values, 
 the allowlisted runtime options. Missing, duplicate, malformed, or unknown direct options still
 fail closed before any environment operation.
 
+Each read-only CLI metadata operation is recorded under a stable sanitized phase name. A failed
+preparation reports the first failing phase plus allowlisted exit, output-shape, parser, and outcome
+categories; earlier successful phase evidence is preserved and later phases are marked not attempted.
+The harness never renders commands, arguments, CLI envelopes, stdout, stderr, or raw errors, and it
+does not retry or attempt automatic CLI recovery. Correct a reported preparation failure before any
+new explicitly authorized validation attempt.
+
 Repository tests now include mocked handler/collector behavior, deterministic deadline and
 abort-aware retry cases, credential-shape cases, and a local Supabase PostgreSQL integration suite
 at `supabase/tests/database/forecast_scheduler.test.sql`. The database suite covers inclusive
