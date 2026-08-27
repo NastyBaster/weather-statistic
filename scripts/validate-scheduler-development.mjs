@@ -77,6 +77,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "negative_evidence_terminalization_failed",
     "negative_evidence_state_consume_failed",
     "validation_artifact_cleanup_failed",
+    "scheduler_artifact_publication_failed",
     "validation_artifact_path_unsafe",
   ]);
   return { category: allowed.has(error?.message) ? error.message : "scheduler_validation_failed", retries: 0 };
@@ -145,15 +146,22 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     if (evidence.newScheduledRuns !== 0 || evidence.negativeCreatedRuns !== 0) await terminalizeNegativeEvidence(state, "negative_runs_created", consumed);
     if (evidence.activeScheduledRuns !== 0) await terminalizeNegativeEvidence(state, "active_scheduled_run_detected", consumed);
     const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
-    await binding.writeSqlArtifacts(preflight.linkedRef, state.attempt_boundary, state.scheduled_run_baseline);
-    await binding.writePhaseState(sanitizePhaseState({
-      phase: "manual_enqueue_required",
-      negative_evidence_passed: true,
-      negative: state.negative,
-      attempt_boundary: state.attempt_boundary,
-      scheduled_run_baseline: state.scheduled_run_baseline,
-      cleanup: "after_manual_evidence",
-    }));
+    try {
+      await binding.writeSqlArtifacts(preflight.linkedRef, state.attempt_boundary, state.scheduled_run_baseline);
+      await binding.writePhaseState(sanitizePhaseState({
+        phase: "manual_enqueue_required",
+        negative_evidence_passed: true,
+        negative: state.negative,
+        attempt_boundary: state.attempt_boundary,
+        scheduled_run_baseline: state.scheduled_run_baseline,
+        cleanup: "after_manual_evidence",
+      }));
+      if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim();
+    } catch (error) {
+      try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); } catch { throw new Error("validation_artifact_cleanup_failed"); }
+      if (error?.message === "validation_artifact_cleanup_failed") throw error;
+      throw new Error("scheduler_artifact_publication_failed");
+    }
     return sanitizePhaseState({ phase: "manual_enqueue_required", negative_evidence_passed: true, attempt_boundary: state.attempt_boundary, scheduled_run_baseline: state.scheduled_run_baseline, cleanup: "after_manual_evidence" });
   }
 
