@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createSchedulerDevelopmentLocalBinding } from "../scripts/lib/scheduler-development-local-binding.mjs";
+import { runHybridDevelopment, sanitizeSchedulerValidationFailure } from "../scripts/validate-scheduler-development.mjs";
 
 const files = new Set(["scheduler-phase-state.json"]), resetDeletes = [], rootCreates = [];
 const fs = {
@@ -40,4 +41,28 @@ await assert.rejects(readFailure.consumeNegativeEvidenceState(), /negative_evide
 assert.equal(failureCalls.release, 1);
 assert.equal(failureCalls.move, 0);
 assert.equal(failureFiles.has("scheduler-resume-claim"), false);
+
+const releaseFailureCalls = { release: 0, deletes: 0 };
+const releaseFailureFiles = new Set();
+const releaseFailureFs = {
+  async mkdir(path) { if (path.includes("forecast-scheduler-validation-claim")) releaseFailureFiles.add("claim"); },
+  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.includes("validation") || path.includes("forecast-scheduler-validation-claim") }; },
+  async readdir() { return []; },
+  async unlink() { releaseFailureCalls.deletes += 1; },
+  async rmdir(path) {
+    if (path.includes("forecast-scheduler-validation-claim")) {
+      releaseFailureCalls.release += 1;
+      const error = new Error("sensitive filesystem path"); error.code = "EACCES"; throw error;
+    }
+  },
+};
+const releaseFailureBinding = createSchedulerDevelopmentLocalBinding({ filesystem: releaseFailureFs, temporaryDirectory: "C:/validation", readPhaseState: async () => ({ phase: "read_only_preflight_required" }) });
+await assert.rejects(releaseFailureBinding.prepareAttempt(), /scheduler_resume_claim_release_failed/);
+assert.equal(releaseFailureCalls.release, 1);
+assert.equal(releaseFailureCalls.deletes, 0);
+assert.equal(releaseFailureFiles.has("claim"), true);
+const propagated = { async prepareAttempt() { throw new Error("scheduler_resume_claim_release_failed"); } };
+await assert.rejects(runHybridDevelopment(["--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--development-name=development", "--production-name=production"], propagated), /scheduler_resume_claim_release_failed/);
+assert.equal(sanitizeSchedulerValidationFailure(new Error("scheduler_resume_claim_release_failed")).category, "scheduler_resume_claim_release_failed");
+assert.equal(JSON.stringify(sanitizeSchedulerValidationFailure(new Error("scheduler_resume_claim_release_failed"))).includes("sensitive filesystem path"), false);
 console.log("scheduler resume claim: 9 fixtures, 0 failed, 0 skipped, 0 not-run");

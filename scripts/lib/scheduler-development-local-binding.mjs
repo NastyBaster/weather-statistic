@@ -234,7 +234,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       await acquireResumeClaim("scheduler_resume_claim_active");
       await removeArtifacts(artifactNames);
       await releaseResumeClaim();
-    } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed") throw error; fail("validation_artifact_cleanup_failed"); }
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed" || error?.message === "scheduler_resume_claim_release_failed") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
