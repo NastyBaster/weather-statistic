@@ -72,6 +72,14 @@ counters, invariants, duplicate snapshot identities, and unexpected active runs.
 transfer accepts only the required tagged aggregate fields. Tests remain synthetic; no SQL was
 executed for this repository-only change, Cron is not configured, and production is unchanged.
 
+The manual boundary is ordered and mandatory: prepare and run the read-only preflight, explicitly
+authorize the four negative requests, then run the distinct read-only negative-evidence artifact.
+Only a parsed zero-run/zero-active result for the same durable boundary enables preparation of the
+exactly-once enqueue and post-enqueue evidence artifacts. Negative completion never creates enqueue
+artifacts, and negative requests or enqueue are never repeated automatically. A failed or ambiguous
+negative-evidence result remains terminal until a new explicitly authorized attempt; production is
+unsupported.
+
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
 fix does not execute a live validation or alter the scheduler contract.

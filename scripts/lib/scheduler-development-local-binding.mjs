@@ -6,6 +6,7 @@ import {
   buildEnqueueSql as buildGuardedEnqueueSql,
   buildEvidenceSql as buildBoundEvidenceSql,
   buildPreflightSql,
+  buildNegativeEvidenceSql,
   requireAttemptBoundary,
   requireBaseline,
 } from "./scheduler-smoke-artifacts.mjs";
@@ -109,7 +110,7 @@ export function immutableNegativeRecords(records) {
 }
 
 export function sanitizePhaseState(state) {
-  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline"];
+  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed"];
   const output = {};
   for (const key of allowed) if (key in state) output[key] = state[key];
   return JSON.parse(JSON.stringify(output));
@@ -322,6 +323,17 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     return { enqueuePath, evidencePath };
   }
 
+  async function writeNegativeEvidenceArtifact(attemptBoundary, scheduledRunBaseline) {
+    requireAttemptBoundary(attemptBoundary);
+    requireBaseline(scheduledRunBaseline);
+    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    const path = join(temporaryDirectory, "scheduler-negative-evidence.sql");
+    const staged = `${path}.tmp`;
+    await filesystem.writeFile(staged, buildNegativeEvidenceSql(attemptBoundary, scheduledRunBaseline), { encoding: "utf8", mode: 0o600 });
+    await filesystem.rename(staged, path);
+    return { negativeEvidencePath: path };
+  }
+
   async function writePhaseState(state) {
     await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
     const staged = `${phaseStatePath}.tmp`;
@@ -331,7 +343,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (!["read_only_preflight_required", "manual_enqueue_required"].includes(state.phase)) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
@@ -339,5 +351,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     await filesystem.rm(temporaryDirectory, { recursive: true, force: true });
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
 }

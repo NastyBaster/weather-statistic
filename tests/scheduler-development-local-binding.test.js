@@ -5,7 +5,7 @@ import {
   parseCliJsonEnvelope,
   sanitizePhaseState,
 } from "../scripts/lib/scheduler-development-local-binding.mjs";
-import { buildEnqueueSql, buildEvidenceSql, buildPreflightSql } from "../scripts/lib/scheduler-smoke-artifacts.mjs";
+import { buildEnqueueSql, buildEvidenceSql, buildNegativeEvidenceSql, buildPreflightSql, parseNegativeEvidenceResult } from "../scripts/lib/scheduler-smoke-artifacts.mjs";
 import { runHybridDevelopment } from "../scripts/validate-scheduler-development.mjs";
 
 const ref = "synthetic-development";
@@ -66,6 +66,9 @@ assert.doesNotMatch(evidence, /error_message|uuid|request_id/i);
 assert.deepEqual(assertResumeInput({ enqueueCommitted: true, evidence: { newScheduledRuns: 1, duplicateIdentityCount: 0, counterInvariant: true } }).phase, "complete");
 assert.throws(() => assertResumeInput({ enqueueCommitted: false }), /manual_enqueue_confirmation_required/);
 assert.deepEqual(sanitizePhaseState({ phase: "x", linkedRef: ref, endpoint: "sensitive", cleanup: "yes" }), { phase: "x", cleanup: "yes" });
+assert.match(buildNegativeEvidenceSql("2026-01-01T00:00:00Z", 0), /set transaction read only/i);
+assert.doesNotMatch(buildNegativeEvidenceSql("2026-01-01T00:00:00Z", 0), /net\.http_post/i);
+assert.deepEqual(parseNegativeEvidenceResult({ result_tag: "scheduler_smoke_negative_evidence", attempt_boundary: "2026-01-01T00:00:00Z", scheduled_run_baseline: 0, new_scheduled_runs: 0, active_scheduled_runs: 0, negative_created_runs: 0 }).newScheduledRuns, 0);
 
 let entrypointCalled = false;
 let persistedState;
@@ -73,6 +76,7 @@ const entrypoint = {
   async preflight() { entrypointCalled = true; return { linkedRef: ref, endpoint: "synthetic", target: "verified", migrations: "6/6/0/0" }; },
   async runNegativeCases() { return negative; },
   async writePreflightArtifact() { return {}; },
+  async writeNegativeEvidenceArtifact() { return {}; },
   async writeSqlArtifacts() { return {}; },
   async writePhaseState(state) { persistedState = state; },
   async readPhaseState() { return persistedState; },
@@ -89,8 +93,16 @@ const afterManualPreflight = await runHybridDevelopment([
   "--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--resume-after-manual-preflight",
   "--development-name=development", "--production-name=production", "--attempt-boundary=2026-01-01T00:00:00Z", "--scheduled-run-baseline=0",
 ], entrypoint);
-assert.equal(afterManualPreflight.phase, "manual_enqueue_required");
+assert.equal(afterManualPreflight.phase, "read_only_negative_evidence_required");
 assert.equal(afterManualPreflight.negative.length, 4);
+const negativeEvidence = await runHybridDevelopment([
+  "--live-development", "--hybrid-sql-editor", "--confirm-development-smoke", "--resume-after-negative-evidence",
+  "--development-name=development", "--production-name=production", "--negative-evidence-result-tag=scheduler_smoke_negative_evidence",
+  "--negative-evidence-attempt-boundary=2026-01-01T00:00:00Z", "--negative-evidence-baseline=0", "--negative-evidence-new-runs=0",
+  "--negative-evidence-active-runs=0", "--negative-evidence-created-runs=0",
+], entrypoint);
+assert.equal(negativeEvidence.phase, "manual_enqueue_required");
+assert.equal(negativeEvidence.negative_evidence_passed, true);
 const progressStates = [];
 const interruptedBinding = {
   ...entrypoint,

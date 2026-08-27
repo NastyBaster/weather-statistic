@@ -30,6 +30,32 @@ export function parsePreflightResult(row) {
   });
 }
 
+export function parseNegativeEvidenceResult(row) {
+  const allowed = ["result_tag", "attempt_boundary", "scheduled_run_baseline", "new_scheduled_runs", "active_scheduled_runs", "negative_created_runs"];
+  if (!row) fail("negative_evidence_missing");
+  if (Object.keys(row).some((key) => !allowed.includes(key))) fail("negative_evidence_sensitive_output");
+  if (row.result_tag !== "scheduler_smoke_negative_evidence") fail("negative_evidence_parser_failure");
+  if (row.attempt_boundary === undefined || row.scheduled_run_baseline === undefined
+    || !Number.isInteger(row.scheduled_run_baseline) || row.scheduled_run_baseline < 0
+    || !Number.isInteger(row.new_scheduled_runs) || row.new_scheduled_runs < 0
+    || !Number.isInteger(row.active_scheduled_runs) || row.active_scheduled_runs < 0
+    || !Number.isInteger(row.negative_created_runs) || row.negative_created_runs < 0) fail("negative_evidence_parser_failure");
+  requireAttemptBoundary(row.attempt_boundary);
+  return Object.freeze({
+    attemptBoundary: row.attempt_boundary,
+    scheduledRunBaseline: row.scheduled_run_baseline,
+    newScheduledRuns: row.new_scheduled_runs,
+    activeScheduledRuns: row.active_scheduled_runs,
+    negativeCreatedRuns: row.negative_created_runs,
+  });
+}
+
+export function parseNegativeEvidenceResults(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) fail("negative_evidence_missing");
+  if (rows.length !== 1) fail("negative_evidence_ambiguous");
+  return parseNegativeEvidenceResult(rows[0]);
+}
+
 export function parseEvidenceResult(row) {
   const categories = new Set(["no_new_scheduled_run", "one_running_scheduled_run", "one_terminal_scheduled_run", "unexpected_multiple_scheduled_runs"]);
   if (!row || row.result_tag !== "scheduler_smoke_evidence" || !categories.has(row.run_category)) fail("evidence_result_invalid");
@@ -83,6 +109,33 @@ select
   count(*) filter (where trigger_type = 'scheduled')::integer as scheduled_run_baseline,
   'baseline_established_before_negative_phase'::text as negative_baseline_status
 from public.forecast_runs;
+rollback;
+`;
+}
+
+export function buildNegativeEvidenceSql(attemptBoundary, scheduledRunBaseline) {
+  const boundary = requireAttemptBoundary(attemptBoundary);
+  const baseline = requireBaseline(scheduledRunBaseline);
+  return `begin;
+set transaction read only;
+with attempt as (select '${boundary}'::timestamptz as started_at), summary as (
+  select
+    count(*) filter (where trigger_type = 'scheduled')::integer as scheduled_run_baseline,
+    count(*) filter (where trigger_type = 'scheduled' and created_at >= (select started_at from attempt))::integer as new_scheduled_runs,
+    count(*) filter (where trigger_type = 'scheduled' and status = 'running' and created_at >= (select started_at from attempt))::integer as active_scheduled_runs
+  from public.forecast_runs
+), result as (
+  select scheduled_run_baseline, new_scheduled_runs, active_scheduled_runs,
+    new_scheduled_runs as negative_created_runs from summary
+)
+select 'scheduler_smoke_negative_evidence'::text as result_tag,
+  '${boundary}'::text as attempt_boundary,
+  scheduled_run_baseline,
+  new_scheduled_runs,
+  active_scheduled_runs,
+  negative_created_runs
+from result
+;
 rollback;
 `;
 }
