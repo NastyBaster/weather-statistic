@@ -13,6 +13,7 @@
     "test:scheduler-local-binding": "node tests/scheduler-development-local-binding.test.js",
     "test:scheduler-smoke-artifacts": "node tests/scheduler-smoke-artifacts.test.js",
     "test:scheduler-cli-phase-attribution": "node tests/scheduler-cli-phase-attribution.test.js",
+    "test:scheduler-negative-evidence": "node tests/scheduler-negative-evidence-boundary.test.js",
     "test:scheduler-entrypoint": "node tests/scheduler-entrypoint.test.js",
     "test:scheduler-argument-forwarding": "node tests/scheduler-argument-forwarding.test.js",
     "validate:scheduler:development": "node scripts/validate-scheduler-development.mjs",
