@@ -152,6 +152,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     if (evidence.newScheduledRuns !== 0 || evidence.negativeCreatedRuns !== 0) await terminalizeNegativeEvidence(state, "negative_runs_created", consumed);
     if (evidence.activeScheduledRuns !== 0) await terminalizeNegativeEvidence(state, "active_scheduled_run_detected", consumed);
     const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
+    let statePersisted = false;
     try {
       await binding.writeSqlArtifacts(preflight.linkedRef, state.attempt_boundary, state.scheduled_run_baseline);
       await binding.writePhaseState(sanitizePhaseState({
@@ -162,12 +163,16 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         scheduled_run_baseline: state.scheduled_run_baseline,
         cleanup: "after_manual_evidence",
       }));
-      if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim();
+      statePersisted = true;
     } catch (error) {
-      try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); } catch { throw new Error("validation_artifact_cleanup_failed"); }
+      if (!statePersisted) {
+        try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); } catch { throw new Error("validation_artifact_cleanup_failed"); }
+      }
       if (error?.message === "validation_artifact_cleanup_failed") throw error;
       throw new Error("scheduler_artifact_publication_failed");
     }
+    try { if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); }
+    catch (error) { if (error?.message === "scheduler_resume_claim_release_failed") throw error; throw new Error("scheduler_resume_claim_release_failed"); }
     return sanitizePhaseState({ phase: "manual_enqueue_required", negative_evidence_passed: true, attempt_boundary: state.attempt_boundary, scheduled_run_baseline: state.scheduled_run_baseline, cleanup: "after_manual_evidence" });
   }
 
