@@ -450,12 +450,13 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (!rootExists) return;
       if (!resumeClaimHeld) await acquireResumeClaim("scheduler_resume_claim_active");
       await removeArtifacts(artifactNames);
-      await releaseResumeClaim();
       if (typeof filesystem.rmdir === "function") await filesystem.rmdir(temporaryDirectory);
       else await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
+      await releaseResumeClaim();
     } catch (error) {
       if (error?.code === "ENOENT") return;
       if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error;
+      if (error?.message === "scheduler_resume_claim_release_failed") throw error;
       fail("validation_artifact_cleanup_failed");
     }
   }
