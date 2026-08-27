@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   buildEnqueueSql as buildGuardedEnqueueSql,
   buildEvidenceSql as buildBoundEvidenceSql,
@@ -189,6 +189,9 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const readPersistedPhaseState = dependencies.readPhaseState ?? ((path) => readFile(path, "utf8").then(JSON.parse));
   const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
+  // Keep the exclusive claim adjacent to the removable artifact root so the
+  // root can be removed while lifecycle exclusion remains held.
+  const claimDirectory = join(dirname(temporaryDirectory), ".forecast-scheduler-validation-claim");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
   let resumeClaimHeld = false;
   const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
@@ -240,7 +243,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function acquireResumeClaim(conflictCategory = "negative_evidence_state_consume_failed") {
     await ensureArtifactRoot();
-    const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
+    const claimPath = claimDirectory;
     try { await filesystem.mkdir(claimPath); }
     catch (error) { if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail(conflictCategory); fail("negative_evidence_state_consume_failed"); }
     resumeClaimHeld = true;
@@ -459,7 +462,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function releaseResumeClaim() {
     if (!resumeClaimHeld) return;
-    try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(join(temporaryDirectory, "scheduler-resume-claim")); else await filesystem.rm(join(temporaryDirectory, "scheduler-resume-claim"), { recursive: false, force: true }); }
+    try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(claimDirectory); else await filesystem.rm(claimDirectory, { recursive: false, force: true }); }
     catch (error) { if (error?.code === "ENOENT") { resumeClaimHeld = false; return; } fail("scheduler_resume_claim_release_failed"); }
     resumeClaimHeld = false;
   }

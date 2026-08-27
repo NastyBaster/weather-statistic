@@ -3,11 +3,11 @@ import { createSchedulerDevelopmentLocalBinding } from "../scripts/lib/scheduler
 
 const files = new Set(["scheduler-phase-state.json"]), resetDeletes = [], rootCreates = [];
 const fs = {
-  async mkdir(path) { if (!path.endsWith("scheduler-resume-claim")) { rootCreates.push(path); return; } if (files.has("scheduler-resume-claim")) { const e = new Error("exists"); e.code = "EEXIST"; throw e; } files.add("scheduler-resume-claim"); },
-  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.endsWith("scheduler-resume-claim") }; },
-  async readdir(path) { return path.endsWith("scheduler-resume-claim") ? [] : [...files]; },
+  async mkdir(path) { if (!path.includes("scheduler-resume-claim") && !path.includes("forecast-scheduler-validation-claim")) { rootCreates.push(path); return; } if (files.has("scheduler-resume-claim")) { const e = new Error("exists"); e.code = "EEXIST"; throw e; } files.add("scheduler-resume-claim"); },
+  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim") }; },
+  async readdir(path) { return path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim") ? [] : [...files]; },
   async rename(_from, to) { files.add(to.split(/[\\/]/).pop()); files.delete("scheduler-phase-state.json"); },
-  async writeFile() {}, async unlink(path) { resetDeletes.push(path); files.delete(path.split(/[\\/]/).pop()); }, async rmdir(path) { resetDeletes.push(path); files.delete(path.split(/[\\/]/).pop()); }, async rm() {},
+  async writeFile() {}, async unlink(path) { resetDeletes.push(path); files.delete(path.split(/[\\/]/).pop()); }, async rmdir(path) { resetDeletes.push(path); files.delete(path.split(/[\\/]/).pop()); files.delete("scheduler-resume-claim"); }, async rm() {},
 };
 const binding = createSchedulerDevelopmentLocalBinding({ filesystem: fs, temporaryDirectory: "C:/validation", readPhaseState: async () => ({ phase: "read_only_negative_evidence_required", attempt_boundary: "x", scheduled_run_baseline: 0 }) });
 await binding.consumeNegativeEvidenceState();
@@ -29,8 +29,8 @@ await assert.rejects(cleanup.cleanupArtifacts(), /scheduler_resume_claim_active/
 assert.equal(resetDeletes.length, 0);
 const failureFiles = new Set(), failureCalls = { release: 0, move: 0 };
 const failureFs = {
-  async mkdir(path) { if (path.endsWith("scheduler-resume-claim")) failureFiles.add("scheduler-resume-claim"); },
-  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.endsWith("scheduler-resume-claim") }; },
+  async mkdir(path) { if (path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim")) failureFiles.add("scheduler-resume-claim"); },
+  async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim") }; },
   async rename() { failureCalls.move += 1; },
   async writeFile() {},
   async rmdir() { failureCalls.release += 1; failureFiles.delete("scheduler-resume-claim"); },

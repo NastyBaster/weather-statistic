@@ -13,13 +13,13 @@ function injectedFilesystem({ readState = async () => resumable, releaseError = 
   return {
     calls,
     files,
-    async mkdir(path) { calls.mkdir += 1; if (path.endsWith("scheduler-resume-claim")) { if (files.has("scheduler-resume-claim")) { const error = new Error("exists"); error.code = "EEXIST"; throw error; } files.add("scheduler-resume-claim"); } },
-    async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.endsWith("scheduler-resume-claim") }; },
+    async mkdir(path) { calls.mkdir += 1; if (path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim")) { if (files.has("scheduler-resume-claim")) { const error = new Error("exists"); error.code = "EEXIST"; throw error; } files.add("scheduler-resume-claim"); } },
+    async lstat(path) { return { isSymbolicLink: () => false, isDirectory: () => path.endsWith("validation") || path.includes("scheduler-resume-claim") || path.includes("forecast-scheduler-validation-claim") }; },
     async readdir() { return [...files]; },
     async rename(_from, to) { calls.move += 1; files.add(to.split(/[\\/]/).pop()); files.delete("scheduler-phase-state.json"); },
     async writeFile() {},
     async unlink(path) { calls.unlink += 1; files.delete(path.split(/[\\/]/).pop()); },
-    async rmdir(path) { calls.rmdir += 1; if (releaseError) throw releaseError; files.delete(path.split(/[\\/]/).pop()); },
+    async rmdir(path) { calls.rmdir += 1; if (releaseError) throw releaseError; files.delete(path.split(/[\\/]/).pop()); files.delete("scheduler-resume-claim"); },
     readState,
   };
 }
