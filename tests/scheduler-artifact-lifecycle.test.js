@@ -5,8 +5,8 @@ const names = ["scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evi
 function fsFixture(entries = names) {
   const files = new Set(entries), removed = [];
   return { removed,
-    async mkdir() {}, async readdir() { return [...files]; },
-    async lstat(path) { return { isSymbolicLink: () => path.includes("link"), isDirectory: () => path.endsWith("safe-validation") || path.endsWith("safe-validation/") }; },
+    async mkdir() {}, async readdir(path) { return path.endsWith("scheduler-resume-claim") ? [] : [...files]; },
+    async lstat(path) { return { isSymbolicLink: () => path.includes("link"), isDirectory: () => path.endsWith("safe-validation") || path.endsWith("safe-validation/") || path.endsWith("scheduler-resume-claim") }; },
     async unlink(path) { const name = path.split(/[\\/]/).pop(); files.delete(name); removed.push(name); },
     async writeFile() {}, async rename() {}, async rm(path, options) { if (options?.recursive !== false) files.clear(); }, async rmdir() { files.clear(); },
   };

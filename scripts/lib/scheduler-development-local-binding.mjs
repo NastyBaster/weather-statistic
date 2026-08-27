@@ -190,6 +190,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
+  let resumeClaimHeld = false;
   const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
   const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
 
@@ -203,6 +204,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     for (const entry of entries) {
       const name = typeof entry === "string" ? entry : entry.name;
       if (!artifactNames.has(name)) fail("validation_artifact_path_unsafe");
+      if (name === "scheduler-resume-claim") continue;
       if (!names.has(name)) continue;
       const path = join(temporaryDirectory, name);
       if (typeof filesystem.lstat === "function") {
@@ -215,11 +217,26 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function prepareAttempt() {
-    try { await removeArtifacts(artifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
+    try {
+      if (resumeClaimHeld) fail("validation_artifact_cleanup_failed");
+      await removeArtifacts(artifactNames);
+      await removeRetainedClaim();
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; if (error?.message === "validation_artifact_cleanup_failed") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
     try { await removeArtifacts(writeArtifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function removeRetainedClaim() {
+    const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
+    let stat;
+    try { stat = await filesystem.lstat(claimPath); } catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
+    if (stat.isSymbolicLink?.() || !stat.isDirectory?.()) fail("validation_artifact_cleanup_failed");
+    const entries = await filesystem.readdir(claimPath);
+    if (entries.length > 0) fail("validation_artifact_cleanup_failed");
+    try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(claimPath); else await filesystem.rm(claimPath, { recursive: false, force: true }); }
+    catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function invalidatePhaseState(expectedState) {
@@ -240,6 +257,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail("negative_evidence_state_consume_failed");
       fail("negative_evidence_state_consume_failed");
     }
+    resumeClaimHeld = true;
     let state;
     try { state = await readPhaseState(); } catch (error) { throw error; }
     if (state.phase !== "read_only_negative_evidence_required") fail("negative_evidence_state_consume_failed");
@@ -424,7 +442,8 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function releaseResumeClaim() {
     try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(join(temporaryDirectory, "scheduler-resume-claim")); else await filesystem.rm(join(temporaryDirectory, "scheduler-resume-claim"), { recursive: false, force: true }); }
-    catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
+    catch (error) { if (error?.code === "ENOENT") { resumeClaimHeld = false; return; } fail("validation_artifact_cleanup_failed"); }
+    resumeClaimHeld = false;
   }
 
   return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState, releaseResumeClaim };

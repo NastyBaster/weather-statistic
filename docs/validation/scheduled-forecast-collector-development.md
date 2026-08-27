@@ -95,6 +95,12 @@ If that consume operation fails, no evidence is accepted or persisted and no art
 the original state remains available for a separately authorized recovery. Once consumed, the
 resumable state is never restored, including across cleanup or persistence failures.
 
+The exclusive resume claim is part of the attempt-scoped artifact lifecycle. It is acquired without
+clobbering before state read or evidence parsing; concurrent losers and ambiguous/stale claims fail
+closed. An explicitly authorized new-attempt reset may remove only a safely inspected, empty prior
+claim directory with `rmdir`, never recursively or through a symlink/reparse point. Active claims
+are released only after the forward state and complete artifact set are durable.
+
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
 fix does not execute a live validation or alter the scheduler contract.
