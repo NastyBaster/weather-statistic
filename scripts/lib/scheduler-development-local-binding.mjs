@@ -218,9 +218,10 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function prepareAttempt() {
     try {
-      if (resumeClaimHeld) fail("validation_artifact_cleanup_failed");
+      if (resumeClaimHeld) fail("scheduler_resume_claim_active");
+      await acquireResumeClaim("scheduler_resume_claim_active");
       await removeArtifacts(artifactNames);
-      await removeRetainedClaim();
+      await releaseResumeClaim();
     } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
@@ -228,15 +229,11 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     try { await removeArtifacts(writeArtifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
-  async function removeRetainedClaim() {
+  async function acquireResumeClaim(conflictCategory = "negative_evidence_state_consume_failed") {
     const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
-    let stat;
-    try { stat = await filesystem.lstat(claimPath); } catch (error) { if (error?.code === "ENOENT") return; fail("validation_artifact_cleanup_failed"); }
-    // A claim's existence is the exclusive ownership signal.  A reset has no
-    // ownership capability, so even an empty claim is active/ambiguous and is
-    // preserved for explicit recovery rather than risking another worker.
-    if (stat.isSymbolicLink?.() || !stat.isDirectory?.()) fail("validation_artifact_cleanup_failed");
-    fail("scheduler_resume_claim_active");
+    try { await filesystem.mkdir(claimPath); }
+    catch (error) { if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail(conflictCategory); fail("negative_evidence_state_consume_failed"); }
+    resumeClaimHeld = true;
   }
 
   async function invalidatePhaseState(expectedState) {
@@ -252,12 +249,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function consumeNegativeEvidenceState() {
-    const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
-    try { await filesystem.mkdir(claimPath); } catch (error) {
-      if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail("negative_evidence_state_consume_failed");
-      fail("negative_evidence_state_consume_failed");
-    }
-    resumeClaimHeld = true;
+    await acquireResumeClaim();
     let state;
     try { state = await readPhaseState(); } catch (error) { throw error; }
     if (state.phase !== "read_only_negative_evidence_required") fail("negative_evidence_state_consume_failed");
@@ -441,8 +433,9 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function releaseResumeClaim() {
+    if (!resumeClaimHeld) return;
     try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(join(temporaryDirectory, "scheduler-resume-claim")); else await filesystem.rm(join(temporaryDirectory, "scheduler-resume-claim"), { recursive: false, force: true }); }
-    catch (error) { if (error?.code === "ENOENT") { resumeClaimHeld = false; return; } fail("validation_artifact_cleanup_failed"); }
+    catch (error) { if (error?.code === "ENOENT") { resumeClaimHeld = false; return; } fail("scheduler_resume_claim_release_failed"); }
     resumeClaimHeld = false;
   }
 

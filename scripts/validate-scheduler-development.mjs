@@ -78,6 +78,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "negative_evidence_state_consume_failed",
     "validation_artifact_cleanup_failed",
     "scheduler_resume_claim_active",
+    "scheduler_resume_claim_release_failed",
     "scheduler_artifact_publication_failed",
     "validation_artifact_path_unsafe",
   ]);
@@ -94,21 +95,25 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
 
   const terminalizeNegativeEvidence = async (state, category, alreadyConsumed = false) => {
+    let terminalCategory = category;
     try {
       if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
-      if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts();
+      try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
+      catch { terminalCategory = "validation_artifact_cleanup_failed"; }
       await binding.writePhaseState(sanitizePhaseState({
         phase: "negative_evidence_failed_terminal",
         negative: state.negative,
         attempt_boundary: state.attempt_boundary,
         scheduled_run_baseline: state.scheduled_run_baseline,
-        negative_evidence_failure: category,
+        negative_evidence_failure: terminalCategory,
         cleanup: "terminal",
       }));
-    } catch {
+      if (typeof binding.releaseResumeClaim === "function" && alreadyConsumed) await binding.releaseResumeClaim();
+    } catch (error) {
+      if (error?.message === "scheduler_resume_claim_release_failed") throw error;
       throw new Error("negative_evidence_terminalization_failed");
     }
-    throw new Error(category);
+    throw new Error(terminalCategory);
   };
 
   if (parsed.resume_negative_evidence) {
