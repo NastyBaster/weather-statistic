@@ -99,7 +99,11 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     try {
       if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
       try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
-      catch { terminalCategory = "validation_artifact_cleanup_failed"; }
+      catch (error) {
+        terminalCategory = error?.message === "validation_artifact_path_unsafe"
+          ? "validation_artifact_path_unsafe"
+          : "validation_artifact_cleanup_failed";
+      }
       await binding.writePhaseState(sanitizePhaseState({
         phase: "negative_evidence_failed_terminal",
         negative: state.negative,
