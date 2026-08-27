@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -187,7 +187,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const readLinkedRef = dependencies.readLinkedRef ?? (() => readFile("supabase/.temp/project-ref", "utf8").then((value) => value.trim()));
   const repositoryClean = dependencies.repositoryClean ?? createRepositoryCleanReader();
   const readPersistedPhaseState = dependencies.readPhaseState ?? ((path) => readFile(path, "utf8").then(JSON.parse));
-  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, readdir, lstat, unlink };
+  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
   const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
@@ -195,6 +195,10 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function removeArtifacts(names) {
     await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    if (typeof filesystem.lstat === "function") {
+      const rootStat = await filesystem.lstat(temporaryDirectory);
+      if (rootStat.isSymbolicLink?.() || !rootStat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+    }
     const entries = typeof filesystem.readdir === "function" ? await filesystem.readdir(temporaryDirectory) : [];
     for (const entry of entries) {
       const name = typeof entry === "string" ? entry : entry.name;
@@ -375,8 +379,15 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function cleanupArtifacts() {
-    await removeArtifacts(artifactNames);
-    await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
+    try {
+      await removeArtifacts(artifactNames);
+      if (typeof filesystem.rmdir === "function") await filesystem.rmdir(temporaryDirectory);
+      else await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      if (error?.message === "validation_artifact_path_unsafe") throw error;
+      fail("validation_artifact_cleanup_failed");
+    }
   }
 
   return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts };
