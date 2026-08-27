@@ -194,12 +194,21 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
   const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
 
-  async function removeArtifacts(names) {
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
-    if (typeof filesystem.lstat === "function") {
-      const rootStat = await filesystem.lstat(temporaryDirectory);
-      if (rootStat.isSymbolicLink?.() || !rootStat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+  async function ensureArtifactRoot() {
+    try { await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 }); }
+    catch { fail("validation_artifact_cleanup_failed"); }
+    if (typeof filesystem.lstat !== "function") return;
+    try {
+      const stat = await filesystem.lstat(temporaryDirectory);
+      if (stat.isSymbolicLink?.() || !stat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+    } catch (error) {
+      if (error?.message === "validation_artifact_path_unsafe") throw error;
+      fail("validation_artifact_cleanup_failed");
     }
+  }
+
+  async function removeArtifacts(names) {
+    await ensureArtifactRoot();
     const entries = typeof filesystem.readdir === "function" ? await filesystem.readdir(temporaryDirectory) : [];
     for (const entry of entries) {
       const name = typeof entry === "string" ? entry : entry.name;
@@ -230,6 +239,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function acquireResumeClaim(conflictCategory = "negative_evidence_state_consume_failed") {
+    await ensureArtifactRoot();
     const claimPath = join(temporaryDirectory, "scheduler-resume-claim");
     try { await filesystem.mkdir(claimPath); }
     catch (error) { if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail(conflictCategory); fail("negative_evidence_state_consume_failed"); }
@@ -374,7 +384,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function writePreflightArtifact() {
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const preflightPath = join(temporaryDirectory, "scheduler-pre-enqueue-preflight.sql");
     const staged = `${preflightPath}.tmp`;
     await filesystem.writeFile(staged, buildPreflightSql(), { encoding: "utf8", mode: 0o600 });
@@ -385,7 +395,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   async function writeSqlArtifacts(projectRef, attemptBoundary, scheduledRunBaseline) {
     requireAttemptBoundary(attemptBoundary);
     requireBaseline(scheduledRunBaseline);
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const enqueuePath = join(temporaryDirectory, "scheduler-exactly-once-enqueue.sql");
     const evidencePath = join(temporaryDirectory, "scheduler-post-enqueue-evidence.sql");
     for (const [path, content] of [[enqueuePath, buildGuardedEnqueueSql(projectRef, attemptBoundary, scheduledRunBaseline)], [evidencePath, buildBoundEvidenceSql(attemptBoundary)]]) {
@@ -408,7 +418,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function writePhaseState(state) {
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const staged = `${phaseStatePath}.tmp`;
     await filesystem.writeFile(staged, JSON.stringify(sanitizePhaseState(state)), { encoding: "utf8", mode: 0o600 });
     await filesystem.rename(staged, phaseStatePath);

@@ -101,7 +101,8 @@ closed. Ordinary reset has no owner capability: an existing claim (even an empty
 preserved and reported as an active/ambiguous claim. Only the owning transition may release it with
 `rmdir`, after the forward state and complete artifact set are durable; stale or crashed claims
 require explicit manual recovery and are never removed automatically. Cleanup never recurses or
-follows a symlink/reparse point.
+follows a symlink/reparse point. The trusted artifact root is created and verified before claim
+acquisition when absent; deletion remains claim-protected and root verification fails closed.
 
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
