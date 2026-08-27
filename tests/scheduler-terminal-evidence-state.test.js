@@ -11,8 +11,17 @@ assert.equal(b.invalidated, true);
 assert.equal(b.state.negative_evidence_failure, "negative_runs_created");
 assert.equal(b.clears, 1);
 assert.equal(b.state.negative.length, 1);
-await assert.rejects(runHybridDevelopment(args.map((x) => x.replace("new-runs=1", "new-runs=0").replace("created-runs=1", "created-runs=0")), b), /negative_evidence_failed_terminal/);
+const repeated = await runHybridDevelopment(args.map((x) => x.replace("new-runs=1", "new-runs=0").replace("created-runs=1", "created-runs=0")), b);
+assert.equal(repeated.phase, "negative_evidence_failed_terminal");
 assert.equal(b.writes.length, 1);
+const tombstone = binding(); tombstone.state = { phase: "negative_evidence_failed_terminal", negative_evidence_failure: "negative_runs_created", cleanup: "terminal" };
+let tombstoneConsumes = 0, tombstoneParses = 0;
+tombstone.consumeNegativeEvidenceState = async () => { tombstoneConsumes++; throw new Error("must not consume"); };
+tombstone.writePhaseState = async () => { tombstoneParses++; };
+const unchanged = await runHybridDevelopment(args, tombstone);
+assert.equal(unchanged.phase, "negative_evidence_failed_terminal");
+assert.equal(tombstoneConsumes, 0);
+assert.equal(tombstoneParses, 0);
 
 for (const field of ["negative-evidence-active-runs=1", "negative-evidence-baseline=1"]) {
   const x = binding();
@@ -23,7 +32,8 @@ for (const field of ["negative-evidence-active-runs=1", "negative-evidence-basel
 const persistFail = binding(); persistFail.writePhaseState = async () => { throw new Error("persist"); };
 await assert.rejects(runHybridDevelopment(args, persistFail), /negative_evidence_terminalization_failed/);
 assert.equal(persistFail.clears, 1);
-await assert.rejects(runHybridDevelopment(args.map((x) => x.replace("new-runs=1", "new-runs=0").replace("created-runs=1", "created-runs=0")), persistFail), /negative_evidence_failed_terminal/);
+const persistedTombstone = await runHybridDevelopment(args.map((x) => x.replace("new-runs=1", "new-runs=0").replace("created-runs=1", "created-runs=0")), persistFail);
+assert.equal(persistedTombstone.phase, "negative_evidence_terminalizing");
 const invalidateFail = binding(); invalidateFail.invalidatePhaseState = async () => { throw new Error("rename"); };
 await assert.rejects(runHybridDevelopment(args, invalidateFail), /negative_evidence_terminalization_failed/);
 assert.equal(invalidateFail.clears, 0);
@@ -33,4 +43,6 @@ consumeFail.writePhaseState = async () => { parsedAfterConsumeFailure = true; };
 await assert.rejects(runHybridDevelopment(args, consumeFail), /negative_evidence_state_consume_failed/);
 assert.equal(parsedAfterConsumeFailure, false);
 assert.equal(sanitizeSchedulerValidationFailure(new Error("validation_artifact_cleanup_failed")).category, "validation_artifact_cleanup_failed");
-console.log("scheduler terminal evidence state: 12 fixtures, 0 failed, 0 skipped, 0 not-run");
+assert.equal(sanitizeSchedulerValidationFailure(new Error("negative_evidence_state_consume_failed")).category, "negative_evidence_state_consume_failed");
+assert.equal(sanitizeSchedulerValidationFailure(new Error("unexpected_internal_error")).category, "scheduler_validation_failed");
+console.log("scheduler terminal evidence state: 16 fixtures, 0 failed, 0 skipped, 0 not-run");

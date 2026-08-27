@@ -75,6 +75,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "negative_evidence_sensitive_output",
     "negative_evidence_failed_terminal",
     "negative_evidence_terminalization_failed",
+    "negative_evidence_state_consume_failed",
     "validation_artifact_cleanup_failed",
     "validation_artifact_path_unsafe",
   ]);
@@ -109,6 +110,10 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   };
 
   if (parsed.resume_negative_evidence) {
+    const visibleState = await binding.readPhaseState();
+    if (visibleState.phase === "negative_evidence_failed_terminal" || visibleState.phase === "negative_evidence_terminalizing") {
+      return sanitizePhaseState(visibleState);
+    }
     let state;
     let consumed = false;
     try {
@@ -118,7 +123,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       if (error?.message === "negative_evidence_state_consume_failed") throw error;
       throw new Error("negative_evidence_state_consume_failed");
     }
-    if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") throw new Error("negative_evidence_failed_terminal");
+    if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") return sanitizePhaseState(state);
     if (state.phase !== "read_only_negative_evidence_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
       throw new Error("negative_evidence_missing");
     }
