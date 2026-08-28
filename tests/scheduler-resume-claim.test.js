@@ -57,7 +57,8 @@ const releaseFailureFs = {
   },
 };
 const releaseFailureBinding = createSchedulerDevelopmentLocalBinding({ filesystem: releaseFailureFs, temporaryDirectory: "C:/validation", readPhaseState: async () => ({ phase: "read_only_preflight_required" }) });
-await assert.rejects(releaseFailureBinding.prepareAttempt(), /scheduler_resume_claim_release_failed/);
+await releaseFailureBinding.prepareAttempt();
+await assert.rejects(releaseFailureBinding.releaseResumeClaim(), /scheduler_resume_claim_release_failed/);
 assert.equal(releaseFailureCalls.release, 1);
 assert.equal(releaseFailureCalls.deletes, 0);
 assert.equal(releaseFailureFiles.has("claim"), true);

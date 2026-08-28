@@ -233,8 +233,13 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (resumeClaimHeld) fail("scheduler_resume_claim_active");
       await acquireResumeClaim("scheduler_resume_claim_active");
       await removeArtifacts(artifactNames);
-      await releaseResumeClaim();
     } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed" || error?.message === "scheduler_resume_claim_release_failed") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function clearAttemptArtifacts() {
+    try {
+      await removeArtifacts(new Set([...artifactNames].filter((name) => name !== "scheduler-phase-state.json" && name !== "scheduler-resume-claim")));
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
@@ -436,7 +441,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "negative_evidence_terminalizing", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "manual_enqueue_complete", "negative_evidence_terminalizing", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
@@ -468,5 +473,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     resumeClaimHeld = false;
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
 }

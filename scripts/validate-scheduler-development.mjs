@@ -185,13 +185,20 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   }
 
   if (parsed.resume) {
-    const state = await binding.readPhaseState();
-    if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
-      throw new Error("existing_negative_baseline_not_provable");
-    }
-    let evidence;
+    let claimed = false;
+    let completed = false;
     try {
-      evidence = parseEvidenceResult({
+      if (typeof binding.acquireResumeClaim === "function") {
+        await binding.acquireResumeClaim("scheduler_resume_claim_active");
+        claimed = true;
+      }
+      const state = await binding.readPhaseState();
+      if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
+        throw new Error("existing_negative_baseline_not_provable");
+      }
+      let evidence;
+      try {
+        evidence = parseEvidenceResult({
         result_tag: parsed.evidence_result_tag,
         run_category: parsed.evidence_run_category,
         new_scheduled_runs: Number(parsed.new_scheduled_runs),
@@ -205,25 +212,44 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         duplicate_immutable_identity_count: Number(parsed.duplicate_identity_count),
         unexpected_active_scheduled_runs: Number(parsed.unexpected_active_scheduled_runs),
         counter_invariant: parsed.counter_invariant === "true",
-      });
-    } catch {
-      throw new Error("manual_evidence_invalid");
-    }
-    if (evidence.newScheduledRuns !== 1 || evidence.terminalScheduledRuns !== 1
+        });
+      } catch {
+        throw new Error("manual_evidence_invalid");
+      }
+      if (evidence.newScheduledRuns !== 1 || evidence.terminalScheduledRuns !== 1
       || evidence.runningScheduledRuns !== 0 || evidence.unexpectedActiveScheduledRuns !== 0
       || evidence.terminalStatus === "none" || evidence.duplicateIdentityCount !== 0 || !evidence.counterInvariant) {
-      throw new Error("manual_evidence_rejected");
+        throw new Error("manual_evidence_rejected");
+      }
+      const resumed = sanitizePhaseState(assertResumeInput({
+        enqueueCommitted: parsed.enqueue_committed === "true",
+        evidence: {
+          newScheduledRuns: evidence.newScheduledRuns,
+          duplicateIdentityCount: evidence.duplicateIdentityCount,
+          counterInvariant: evidence.counterInvariant,
+        },
+      }));
+      if (typeof binding.clearAttemptArtifacts === "function") await binding.clearAttemptArtifacts();
+      else await binding.cleanupArtifacts();
+      await binding.writePhaseState(sanitizePhaseState({
+        phase: "manual_enqueue_complete",
+        attempt_boundary: state.attempt_boundary,
+        scheduled_run_baseline: state.scheduled_run_baseline,
+        cleanup: "complete",
+      }));
+      completed = true;
+      if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+      return resumed;
+    } catch (error) {
+      if (claimed && !completed) {
+        try { await binding.releaseResumeClaim(); }
+        catch (releaseError) {
+          if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
+          throw new Error("scheduler_resume_claim_release_failed");
+        }
+      }
+      throw error;
     }
-    const resumed = sanitizePhaseState(assertResumeInput({
-      enqueueCommitted: parsed.enqueue_committed === "true",
-      evidence: {
-        newScheduledRuns: evidence.newScheduledRuns,
-        duplicateIdentityCount: evidence.duplicateIdentityCount,
-        counterInvariant: evidence.counterInvariant,
-      },
-    }));
-    await binding.cleanupArtifacts();
-    return resumed;
   }
 
   if (parsed.resume_preflight) {
@@ -283,15 +309,35 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     }
   }
 
-  if (typeof binding.prepareAttempt === "function") await binding.prepareAttempt();
-  await binding.preflight({ expectedDevelopment, expectedProduction });
-  await binding.writePreflightArtifact();
-  const state = sanitizePhaseState({
-    phase: "read_only_preflight_required",
-    cleanup: "after_manual_preflight",
-  });
-  await binding.writePhaseState(state);
-  return state;
+  let claimed = false;
+  let published = false;
+  try {
+    if (typeof binding.prepareAttempt === "function") { await binding.prepareAttempt(); claimed = true; }
+    await binding.preflight({ expectedDevelopment, expectedProduction });
+    await binding.writePreflightArtifact();
+    const state = sanitizePhaseState({
+      phase: "read_only_preflight_required",
+      cleanup: "after_manual_preflight",
+    });
+    await binding.writePhaseState(state);
+    published = true;
+    if (claimed && typeof binding.releaseResumeClaim === "function") { await binding.releaseResumeClaim(); claimed = false; }
+    return state;
+  } catch (error) {
+    if (claimed && !published) {
+      try { if (typeof binding.clearAttemptArtifacts === "function") await binding.clearAttemptArtifacts(); }
+      catch (cleanupError) {
+        if (cleanupError?.message === "validation_artifact_path_unsafe") throw cleanupError;
+        throw new Error("validation_artifact_cleanup_failed");
+      }
+      try { if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); }
+      catch (releaseError) {
+        if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
+        throw new Error("scheduler_resume_claim_release_failed");
+      }
+    }
+    throw error;
+  }
 }
 
 if (isDirectEsModule(import.meta.url, process.argv[1])) {
