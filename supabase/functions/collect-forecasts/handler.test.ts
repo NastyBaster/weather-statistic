@@ -3,6 +3,7 @@ import { handler } from "./index.ts";
 import {
   classifyRequestShape,
   INVALID_REQUEST_REASONS,
+  isBodyTooLarge,
 } from "./request-contract.js";
 import { buildEnqueueSql } from "../../../scripts/lib/scheduler-smoke-artifacts.mjs";
 
@@ -144,7 +145,7 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     ],
     [
       request("admin-jwt", `{${" ".repeat(1025)}}`),
-      "invalid_json",
+      "body_too_large",
       `{${" ".repeat(1025)}}`,
     ],
     [
@@ -181,6 +182,34 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     assertEquals(JSON.stringify(payload).includes("spoof"), false);
     assertEquals(JSON.stringify(payload).includes("admin-jwt"), false);
   }
+});
+
+Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
+  const exact = `{${" ".repeat(1022)}}`;
+  const oversized = `{${" ".repeat(1023)}}`;
+  assertEquals(new TextEncoder().encode(exact).length, 1024);
+  assertEquals(new TextEncoder().encode(oversized).length, 1025);
+  assertEquals(isBodyTooLarge(exact), false);
+  assertEquals(isBodyTooLarge(oversized), true);
+  assertEquals(isBodyTooLarge("é".repeat(513)), true);
+
+  const exactResponse = await handler(
+    request("admin-jwt", exact),
+    baseEnvironment,
+    dependencies(success),
+  );
+  assertEquals(exactResponse.status, 200);
+
+  const oversizedResponse = await handler(
+    request("admin-jwt", oversized),
+    baseEnvironment,
+    dependencies(success),
+  );
+  assertEquals(oversizedResponse.status, 400);
+  assertEquals(await oversizedResponse.json(), {
+    error: "invalid_request",
+    reason: "body_too_large",
+  });
 });
 
 Deno.test("generated scheduler request passes the handler request-shape seam", async () => {

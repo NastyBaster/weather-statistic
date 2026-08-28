@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { authorize, isValidSchedulerToken, parseAllowlist } from "./auth.ts";
 import { collect, CollectionResult } from "./collector.ts";
-import { classifyRequestShape } from "./request-contract.js";
+import { classifyRequestShape, isBodyTooLarge } from "./request-contract.js";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -109,7 +109,13 @@ export async function handler(
   let bodyText: string;
   try {
     bodyText = await request.text();
-    if (new TextEncoder().encode(bodyText).length > 1024) throw new Error();
+  } catch {
+    return json({ error: "invalid_request", reason: "invalid_json" }, 400);
+  }
+  if (isBodyTooLarge(bodyText)) {
+    return json({ error: "invalid_request", reason: "body_too_large" }, 400);
+  }
+  try {
     body = JSON.parse(bodyText);
   } catch {
     return json({ error: "invalid_request", reason: "invalid_json" }, 400);
