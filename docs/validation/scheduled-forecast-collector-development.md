@@ -62,6 +62,11 @@ state rather than authorizing a repeated request. Final resume requires the tagg
 result and all allowlisted aggregate fields, and rejects no-run, running-run, multiple-run,
 unknown-status, or active-run results before cleanup.
 
+Strict request-contract rejections retain the top-level `invalid_request` error and add one stable,
+non-sensitive reason code for development and operational diagnosis. The reason enum covers
+unsupported content types, forbidden headers, invalid JSON, non-object bodies, and non-empty
+objects; raw request/response logs remain prohibited.
+
 The enqueue artifact repeats safety-critical checks in its own write transaction immediately
 before its one `pg_net` call. It uses the same advisory lock as the scheduled claim protocol,
 rejects changed scheduled-run baseline or an active run, verifies the extension, routine, Vault
