@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   buildEnqueueSql as buildGuardedEnqueueSql,
   buildEvidenceSql as buildBoundEvidenceSql,
@@ -110,7 +110,7 @@ export function immutableNegativeRecords(records) {
 }
 
 export function sanitizePhaseState(state) {
-  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed"];
+  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed", "negative_evidence_failure"];
   const output = {};
   for (const key of allowed) if (key in state) output[key] = state[key];
   return JSON.parse(JSON.stringify(output));
@@ -187,9 +187,111 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const readLinkedRef = dependencies.readLinkedRef ?? (() => readFile("supabase/.temp/project-ref", "utf8").then((value) => value.trim()));
   const repositoryClean = dependencies.repositoryClean ?? createRepositoryCleanReader();
   const readPersistedPhaseState = dependencies.readPhaseState ?? ((path) => readFile(path, "utf8").then(JSON.parse));
-  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm };
+  const filesystem = dependencies.filesystem ?? { mkdir, writeFile, rename, rm, rmdir, readdir, lstat, unlink };
   const temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "forecast-scheduler-validation");
+  // Keep the exclusive claim adjacent to the removable artifact root so the
+  // root can be removed while lifecycle exclusion remains held.
+  const claimDirectory = join(dirname(temporaryDirectory), ".forecast-scheduler-validation-claim");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
+  let resumeClaimHeld = false;
+  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
+  const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
+
+  async function ensureArtifactRoot() {
+    try { await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 }); }
+    catch { fail("validation_artifact_cleanup_failed"); }
+    if (typeof filesystem.lstat !== "function") return;
+    try {
+      const stat = await filesystem.lstat(temporaryDirectory);
+      if (stat.isSymbolicLink?.() || !stat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+    } catch (error) {
+      if (error?.message === "validation_artifact_path_unsafe") throw error;
+      fail("validation_artifact_cleanup_failed");
+    }
+  }
+
+  async function removeArtifacts(names) {
+    await ensureArtifactRoot();
+    const entries = typeof filesystem.readdir === "function" ? await filesystem.readdir(temporaryDirectory) : [];
+    for (const entry of entries) {
+      const name = typeof entry === "string" ? entry : entry.name;
+      if (!artifactNames.has(name)) fail("validation_artifact_path_unsafe");
+      if (name === "scheduler-resume-claim") continue;
+      if (!names.has(name)) continue;
+      const path = join(temporaryDirectory, name);
+      if (typeof filesystem.lstat === "function") {
+        const stat = await filesystem.lstat(path);
+        if (stat.isSymbolicLink?.() || stat.isDirectory?.()) fail("validation_artifact_path_unsafe");
+      }
+      if (typeof filesystem.unlink === "function") await filesystem.unlink(path);
+      else await filesystem.rm(path, { force: true });
+    }
+  }
+
+  async function prepareAttempt() {
+    try {
+      if (resumeClaimHeld) fail("scheduler_resume_claim_active");
+      await acquireResumeClaim("scheduler_resume_claim_active");
+      await removeArtifacts(artifactNames);
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed" || error?.message === "scheduler_resume_claim_release_failed") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function clearAttemptArtifacts() {
+    try {
+      await removeArtifacts(new Set([...artifactNames].filter((name) => name !== "scheduler-phase-state.json" && name !== "scheduler-resume-claim")));
+    } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function clearWriteArtifacts() {
+    try { await removeArtifacts(writeArtifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function acquireResumeClaim(conflictCategory = "negative_evidence_state_consume_failed") {
+    await ensureArtifactRoot();
+    const claimPath = claimDirectory;
+    try { await filesystem.mkdir(claimPath); }
+    catch (error) { if (error?.code === "EEXIST" || error?.code === "EACCES" || error?.code === "EPERM") fail(conflictCategory); fail("negative_evidence_state_consume_failed"); }
+    resumeClaimHeld = true;
+  }
+
+  async function invalidatePhaseState(expectedState) {
+    if (!expectedState || expectedState.phase !== "read_only_negative_evidence_required") fail("negative_evidence_terminalization_failed");
+    await filesystem.rename(phaseStatePath, join(temporaryDirectory, "scheduler-phase-state.invalidated"));
+    try {
+      await filesystem.writeFile(`${phaseStatePath}.tmp`, JSON.stringify({ phase: "negative_evidence_terminalizing", cleanup: "terminal" }), { encoding: "utf8", mode: 0o600 });
+      await filesystem.rename(`${phaseStatePath}.tmp`, phaseStatePath);
+    } catch {
+      // A missing state file is itself non-resumable; do not restore the old state.
+      throw new Error("negative_evidence_terminalization_failed");
+    }
+  }
+
+  async function consumeNegativeEvidenceState({ claimAlreadyHeld = false } = {}) {
+    if (!claimAlreadyHeld) await acquireResumeClaim();
+    let state;
+    try { state = await readPhaseState(); }
+    catch (error) {
+      if (!claimAlreadyHeld) {
+        try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      }
+      fail("negative_evidence_state_consume_failed");
+    }
+    if (state.phase !== "read_only_negative_evidence_required") {
+      if (!claimAlreadyHeld) {
+        try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      }
+      fail("negative_evidence_state_consume_failed");
+    }
+    const consumedPath = join(temporaryDirectory, "scheduler-phase-state.consumed");
+    try {
+      await filesystem.rename(phaseStatePath, consumedPath);
+      await filesystem.writeFile(`${phaseStatePath}.tmp`, JSON.stringify({ phase: "negative_evidence_terminalizing", cleanup: "terminal" }), { encoding: "utf8", mode: 0o600 });
+      await filesystem.rename(`${phaseStatePath}.tmp`, phaseStatePath);
+    } catch {
+      throw new Error("negative_evidence_state_consume_failed");
+    }
+    return state;
+  }
 
   async function runMetadataPreflightPhase(records, phase, args, listKeys) {
     if (!METADATA_PHASE_SET.has(phase)) fail("metadata_phase_unknown");
@@ -301,7 +403,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function writePreflightArtifact() {
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const preflightPath = join(temporaryDirectory, "scheduler-pre-enqueue-preflight.sql");
     const staged = `${preflightPath}.tmp`;
     await filesystem.writeFile(staged, buildPreflightSql(), { encoding: "utf8", mode: 0o600 });
@@ -312,7 +414,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   async function writeSqlArtifacts(projectRef, attemptBoundary, scheduledRunBaseline) {
     requireAttemptBoundary(attemptBoundary);
     requireBaseline(scheduledRunBaseline);
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const enqueuePath = join(temporaryDirectory, "scheduler-exactly-once-enqueue.sql");
     const evidencePath = join(temporaryDirectory, "scheduler-post-enqueue-evidence.sql");
     for (const [path, content] of [[enqueuePath, buildGuardedEnqueueSql(projectRef, attemptBoundary, scheduledRunBaseline)], [evidencePath, buildBoundEvidenceSql(attemptBoundary)]]) {
@@ -326,7 +428,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   async function writeNegativeEvidenceArtifact(attemptBoundary, scheduledRunBaseline) {
     requireAttemptBoundary(attemptBoundary);
     requireBaseline(scheduledRunBaseline);
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await clearWriteArtifacts();
     const path = join(temporaryDirectory, "scheduler-negative-evidence.sql");
     const staged = `${path}.tmp`;
     await filesystem.writeFile(staged, buildNegativeEvidenceSql(attemptBoundary, scheduledRunBaseline), { encoding: "utf8", mode: 0o600 });
@@ -335,7 +437,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   }
 
   async function writePhaseState(state) {
-    await filesystem.mkdir(temporaryDirectory, { recursive: true, mode: 0o700 });
+    await ensureArtifactRoot();
     const staged = `${phaseStatePath}.tmp`;
     await filesystem.writeFile(staged, JSON.stringify(sanitizePhaseState(state)), { encoding: "utf8", mode: 0o600 });
     await filesystem.rename(staged, phaseStatePath);
@@ -343,13 +445,37 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
 
   async function readPhaseState() {
     const state = sanitizePhaseState(await readPersistedPhaseState(phaseStatePath));
-    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required"].includes(state.phase)) fail("manual_phase_state_invalid");
+    if (!["read_only_preflight_required", "preflight_passed_negative_revalidation_required", "negative_revalidation_in_progress", "read_only_negative_evidence_required", "negative_evidence_passed", "manual_enqueue_required", "manual_enqueue_complete", "negative_evidence_terminalizing", "negative_evidence_failed_terminal"].includes(state.phase)) fail("manual_phase_state_invalid");
     return state;
   }
 
   async function cleanupArtifacts() {
-    await filesystem.rm(temporaryDirectory, { recursive: true, force: true });
+    let rootExists = true;
+    try {
+      if (typeof filesystem.lstat === "function") {
+        try { const rootStat = await filesystem.lstat(temporaryDirectory); if (rootStat.isSymbolicLink?.() || !rootStat.isDirectory?.()) fail("validation_artifact_path_unsafe"); }
+        catch (error) { if (error?.code === "ENOENT") { rootExists = false; } else throw error; }
+      }
+      if (!rootExists) return;
+      if (!resumeClaimHeld) await acquireResumeClaim("scheduler_resume_claim_active");
+      await removeArtifacts(artifactNames);
+      if (typeof filesystem.rmdir === "function") await filesystem.rmdir(temporaryDirectory);
+      else await filesystem.rm(temporaryDirectory, { recursive: false, force: true });
+      await releaseResumeClaim();
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error;
+      if (error?.message === "scheduler_resume_claim_release_failed") throw error;
+      fail("validation_artifact_cleanup_failed");
+    }
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts };
+  async function releaseResumeClaim() {
+    if (!resumeClaimHeld) return;
+    try { if (typeof filesystem.rmdir === "function") await filesystem.rmdir(claimDirectory); else await filesystem.rm(claimDirectory, { recursive: false, force: true }); }
+    catch (error) { if (error?.code === "ENOENT") { resumeClaimHeld = false; return; } fail("scheduler_resume_claim_release_failed"); }
+    resumeClaimHeld = false;
+  }
+
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
 }

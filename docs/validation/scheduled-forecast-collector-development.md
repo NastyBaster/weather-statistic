@@ -76,9 +76,33 @@ The manual boundary is ordered and mandatory: prepare and run the read-only pref
 authorize the four negative requests, then run the distinct read-only negative-evidence artifact.
 Only a parsed zero-run/zero-active result for the same durable boundary enables preparation of the
 exactly-once enqueue and post-enqueue evidence artifacts. Negative completion never creates enqueue
-artifacts, and negative requests or enqueue are never repeated automatically. A failed or ambiguous
-negative-evidence result remains terminal until a new explicitly authorized attempt; production is
-unsupported.
+artifacts, and negative requests or enqueue are never repeated automatically. Artifacts are scoped
+to one attempt and phase: stale write-capable files and partial files are removed before a new
+attempt and before the negative-evidence gate, and cleanup failure blocks progress. A failed or
+ambiguous negative-evidence result is persisted as a non-resumable terminal state; its earlier
+evidence is retained, write-capable artifacts are removed, and a new authorization plus durable
+baseline is required. An old SQL Editor tab cannot be closed by the CLI, so users must never run
+an old tab; the in-database guards remain the final protection. Production is unsupported.
+
+Terminalization first atomically invalidates the resumable state and leaves a minimal tombstone;
+cleanup and detailed terminal-state persistence happen only afterward. Thus persistence or cleanup
+failures remain non-resumable and use the sanitized `validation_artifact_cleanup_failed` category
+when applicable. Manual intervention and a new authorized attempt with a new baseline are required;
+no live validation occurred in this correction.
+
+On resume, the negative-evidence state is exclusively consumed before submitted evidence is parsed.
+If that consume operation fails, no evidence is accepted or persisted and no artifact is generated;
+the original state remains available for a separately authorized recovery. Once consumed, the
+resumable state is never restored, including across cleanup or persistence failures.
+
+The exclusive resume claim is part of the attempt-scoped artifact lifecycle. It is acquired without
+clobbering before state read or evidence parsing; concurrent losers and ambiguous/stale claims fail
+closed. Ordinary reset has no owner capability: an existing claim (even an empty directory) is
+preserved and reported as an active/ambiguous claim. Only the owning transition may release it with
+`rmdir`, after the forward state and complete artifact set are durable; stale or crashed claims
+require explicit manual recovery and are never removed automatically. Cleanup never recurses or
+follows a symlink/reparse point. The trusted artifact root is created and verified before claim
+acquisition when absent; deletion remains claim-protected and root verification fails closed.
 
 The harness direct-entrypoint guard is normalized through Node file URL/path APIs so the same
 documented command is recognized on Windows and POSIX paths, including spaces. This compatibility
