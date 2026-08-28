@@ -73,6 +73,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "negative_evidence_stale",
     "negative_evidence_parser_failure",
     "negative_evidence_sensitive_output",
+    "negative_evidence_preflight_failed",
     "negative_evidence_failed_terminal",
     "negative_evidence_terminalization_failed",
     "negative_evidence_state_consume_failed",
@@ -147,9 +148,13 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       if (new Set(["negative_evidence_state_consume_failed", "scheduler_resume_claim_release_failed"]).has(error?.message)) throw error;
       throw new Error("negative_evidence_state_consume_failed");
     }
-    if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") return sanitizePhaseState(state);
+    if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") {
+      try { if (claimed && typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); claimed = false; }
+      catch (error) { if (error?.message === "scheduler_resume_claim_release_failed") throw error; throw new Error("scheduler_resume_claim_release_failed"); }
+      return sanitizePhaseState(state);
+    }
     if (state.phase !== "read_only_negative_evidence_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
-      throw new Error("negative_evidence_missing");
+      await terminalizeNegativeEvidence(state, "negative_evidence_missing", consumed);
     }
     let evidence;
     try {
@@ -168,8 +173,12 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     if (evidence.scheduledRunBaseline !== state.scheduled_run_baseline) await terminalizeNegativeEvidence(state, "negative_evidence_baseline_mismatch", consumed);
     if (evidence.newScheduledRuns !== 0 || evidence.negativeCreatedRuns !== 0) await terminalizeNegativeEvidence(state, "negative_runs_created", consumed);
     if (evidence.activeScheduledRuns !== 0) await terminalizeNegativeEvidence(state, "active_scheduled_run_detected", consumed);
-    const preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
-    let statePersisted = false;
+    let preflight;
+    try {
+      preflight = await binding.preflight({ expectedDevelopment, expectedProduction });
+    } catch {
+      await terminalizeNegativeEvidence(state, "negative_evidence_preflight_failed", consumed);
+    }
     try {
       await binding.writeSqlArtifacts(preflight.linkedRef, state.attempt_boundary, state.scheduled_run_baseline);
       await binding.writePhaseState(sanitizePhaseState({
@@ -180,17 +189,8 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         scheduled_run_baseline: state.scheduled_run_baseline,
         cleanup: "after_manual_evidence",
       }));
-      statePersisted = true;
     } catch (error) {
-      if (!statePersisted) {
-        try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
-        catch (cleanupError) {
-          if (cleanupError?.message === "validation_artifact_path_unsafe") throw cleanupError;
-          throw new Error("validation_artifact_cleanup_failed");
-        }
-      }
-      if (error?.message === "validation_artifact_cleanup_failed") throw error;
-      throw new Error("scheduler_artifact_publication_failed");
+      await terminalizeNegativeEvidence(state, "scheduler_artifact_publication_failed", consumed);
     }
     try { if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); claimed = false; }
     catch (error) { if (error?.message === "scheduler_resume_claim_release_failed") throw error; throw new Error("scheduler_resume_claim_release_failed"); }

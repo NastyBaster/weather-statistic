@@ -124,7 +124,7 @@ async function invariant10FinallyPreservesCommit() {
 async function invariant11NoDuplicatePublication() {
   const fixture = await runCommittedFailure(new Error("release failure"));
   assert.equal(fixture.calls.writes, 1);
-  await assert.rejects(runHybridDevelopment(evidenceArgs, fixture.binding), /negative_evidence_missing|existing_negative_baseline_not_provable|negative_evidence_state_consume_failed/);
+  await assert.rejects(runHybridDevelopment(evidenceArgs, fixture.binding), /negative_evidence_terminalization_failed|negative_evidence_missing|existing_negative_baseline_not_provable|negative_evidence_state_consume_failed/);
   assert.equal(fixture.calls.writes, 1);
 }
 
