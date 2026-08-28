@@ -266,16 +266,20 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     }
   }
 
-  async function consumeNegativeEvidenceState() {
-    await acquireResumeClaim();
+  async function consumeNegativeEvidenceState({ claimAlreadyHeld = false } = {}) {
+    if (!claimAlreadyHeld) await acquireResumeClaim();
     let state;
     try { state = await readPhaseState(); }
     catch (error) {
-      try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      if (!claimAlreadyHeld) {
+        try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      }
       fail("negative_evidence_state_consume_failed");
     }
     if (state.phase !== "read_only_negative_evidence_required") {
-      try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      if (!claimAlreadyHeld) {
+        try { await releaseResumeClaim(); } catch { fail("scheduler_resume_claim_release_failed"); }
+      }
       fail("negative_evidence_state_consume_failed");
     }
     const consumedPath = join(temporaryDirectory, "scheduler-phase-state.consumed");

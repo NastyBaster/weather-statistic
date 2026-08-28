@@ -121,16 +121,29 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   };
 
   if (parsed.resume_negative_evidence) {
-    const visibleState = await binding.readPhaseState();
-    if (visibleState.phase === "negative_evidence_failed_terminal" || visibleState.phase === "negative_evidence_terminalizing") {
-      return sanitizePhaseState(visibleState);
-    }
     let state;
     let consumed = false;
+    let claimed = false;
     try {
-      if (typeof binding.consumeNegativeEvidenceState === "function") { state = await binding.consumeNegativeEvidenceState(); consumed = true; }
-      else state = await binding.readPhaseState();
+      if (typeof binding.acquireResumeClaim === "function") {
+        await binding.acquireResumeClaim();
+        claimed = true;
+      }
+      const visibleState = await binding.readPhaseState();
+      if (visibleState.phase === "negative_evidence_failed_terminal" || visibleState.phase === "negative_evidence_terminalizing") {
+        if (claimed && typeof binding.releaseResumeClaim === "function") { await binding.releaseResumeClaim(); claimed = false; }
+        return sanitizePhaseState(visibleState);
+      }
+      if (typeof binding.consumeNegativeEvidenceState === "function") { state = await binding.consumeNegativeEvidenceState({ claimAlreadyHeld: claimed }); consumed = true; }
+      else state = visibleState;
     } catch (error) {
+      if (claimed && error?.message !== "scheduler_resume_claim_release_failed" && typeof binding.releaseResumeClaim === "function") {
+        try { await binding.releaseResumeClaim(); }
+        catch (releaseError) {
+          if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
+          throw new Error("scheduler_resume_claim_release_failed");
+        }
+      }
       if (new Set(["negative_evidence_state_consume_failed", "scheduler_resume_claim_release_failed"]).has(error?.message)) throw error;
       throw new Error("negative_evidence_state_consume_failed");
     }
@@ -179,7 +192,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       if (error?.message === "validation_artifact_cleanup_failed") throw error;
       throw new Error("scheduler_artifact_publication_failed");
     }
-    try { if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); }
+    try { if (typeof binding.releaseResumeClaim === "function") await binding.releaseResumeClaim(); claimed = false; }
     catch (error) { if (error?.message === "scheduler_resume_claim_release_failed") throw error; throw new Error("scheduler_resume_claim_release_failed"); }
     return sanitizePhaseState({ phase: "manual_enqueue_required", negative_evidence_passed: true, attempt_boundary: state.attempt_boundary, scheduled_run_baseline: state.scheduled_run_baseline, cleanup: "after_manual_evidence" });
   }
