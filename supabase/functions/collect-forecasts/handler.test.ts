@@ -1,5 +1,11 @@
 import { assertEquals } from "@std/assert";
 import { handler } from "./index.ts";
+import {
+  classifyRequestShape,
+  INVALID_REQUEST_REASONS,
+  isBodyTooLarge,
+} from "./request-contract.js";
+import { buildEnqueueSql } from "../../../scripts/lib/scheduler-smoke-artifacts.mjs";
 
 const schedulerToken = "A".repeat(43);
 const baseEnvironment = new Map([
@@ -122,24 +128,129 @@ Deno.test("handler authentication and scheduler configuration status matrix", as
 });
 
 Deno.test("handler rejects spoofing and malformed request bodies", async () => {
-  for (
-    const candidate of [
+  const cases = [
+    [
       request("admin-jwt", "", { "content-type": "text/plain" }),
-      request("admin-jwt", "not-json"),
-      request("admin-jwt", "[]"),
-      request("admin-jwt", "null"),
+      "unsupported_content_type",
+      "",
+    ],
+    [request("admin-jwt", "not-json"), "invalid_json", "not-json"],
+    [request("admin-jwt", "[]"), "body_must_be_object", "[]"],
+    [request("admin-jwt", '"text"'), "body_must_be_object", '"text"'],
+    [request("admin-jwt", "null"), "body_must_be_object", "null"],
+    [
       request("admin-jwt", '{"trigger":"retry"}'),
+      "body_must_be_empty",
+      '{"trigger":"retry"}',
+    ],
+    [
       request("admin-jwt", `{${" ".repeat(1025)}}`),
+      "body_too_large",
+      `{${" ".repeat(1025)}}`,
+    ],
+    [
       request("admin-jwt", "{}", { "x-caller-time": "spoof" }),
+      "forbidden_request_header",
+      "{}",
+    ],
+    [
       request("admin-jwt", "{}", { "x-scheduler-slot": "spoof" }),
+      "forbidden_request_header",
+      "{}",
+    ],
+    [
       request("admin-jwt", "{}", { trigger: "scheduled" }),
-    ]
-  ) {
-    assertEquals(
-      (await handler(candidate, baseEnvironment, dependencies(success))).status,
-      400,
+      "forbidden_request_header",
+      "{}",
+    ],
+  ] as const;
+  for (const [candidate, reason, submitted] of cases) {
+    const response = await handler(
+      candidate,
+      baseEnvironment,
+      dependencies(success),
     );
+    assertEquals(response.status, 400);
+    const payload = await response.json();
+    assertEquals(payload, { error: "invalid_request", reason });
+    assertEquals(Object.keys(payload).sort(), ["error", "reason"]);
+    assertEquals(INVALID_REQUEST_REASONS.includes(payload.reason), true);
+    assertEquals(payload.reason.includes(":"), false);
+    if (submitted) {
+      assertEquals(JSON.stringify(payload).includes(submitted), false);
+    }
+    assertEquals(JSON.stringify(payload).includes("spoof"), false);
+    assertEquals(JSON.stringify(payload).includes("admin-jwt"), false);
   }
+});
+
+Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
+  const exact = `{${" ".repeat(1022)}}`;
+  const oversized = `{${" ".repeat(1023)}}`;
+  assertEquals(new TextEncoder().encode(exact).length, 1024);
+  assertEquals(new TextEncoder().encode(oversized).length, 1025);
+  assertEquals(isBodyTooLarge(exact), false);
+  assertEquals(isBodyTooLarge(oversized), true);
+  assertEquals(isBodyTooLarge("é".repeat(513)), true);
+
+  const exactResponse = await handler(
+    request("admin-jwt", exact),
+    baseEnvironment,
+    dependencies(success),
+  );
+  assertEquals(exactResponse.status, 200);
+
+  const oversizedResponse = await handler(
+    request("admin-jwt", oversized),
+    baseEnvironment,
+    dependencies(success),
+  );
+  assertEquals(oversizedResponse.status, 400);
+  assertEquals(await oversizedResponse.json(), {
+    error: "invalid_request",
+    reason: "body_too_large",
+  });
+});
+
+Deno.test("generated scheduler request passes the handler request-shape seam", async () => {
+  const generated = buildEnqueueSql(
+    "synthetic-development",
+    "2026-01-01T00:00:00Z",
+    0,
+  );
+  assertEquals((generated.match(/select net\.http_post\(/g) ?? []).length, 1);
+  assertEquals(/body := '\{\}'::jsonb/.test(generated), true);
+  assertEquals(/'Content-Type', 'application\/json'/.test(generated), true);
+  assertEquals(/'Authorization', 'Bearer/.test(generated), true);
+  assertEquals(
+    classifyRequestShape({
+      contentTypeValid: true,
+      forbiddenHeader: false,
+      bodyText: "{}",
+    }),
+    null,
+  );
+  let collected = 0;
+  const response = await handler(
+    new Request("https://example.test/collect", {
+      method: "POST",
+      body: "{}",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${schedulerToken}`,
+      },
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: (() => {
+        collected += 1;
+        return Promise.resolve(success);
+      }) as never,
+    },
+  );
+  assertEquals(response.status, 200);
+  assertEquals(collected, 1);
 });
 
 Deno.test("handler maps collection outcomes without raw errors", async () => {

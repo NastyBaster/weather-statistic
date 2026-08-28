@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { authorize, isValidSchedulerToken, parseAllowlist } from "./auth.ts";
 import { collect, CollectionResult } from "./collector.ts";
+import { classifyRequestShape, isBodyTooLarge } from "./request-contract.js";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -94,24 +95,44 @@ export async function handler(
   );
   if (decision === 401) return json({ error: "unauthorized" }, 401);
   if (decision === 403) return json({ error: "forbidden" }, 403);
-  if (
-    !hasJsonContentType(request.headers) ||
-    hasDisallowedApplicationHeader(request.headers)
-  ) {
-    return json({ error: "invalid_request" }, 400);
+  const contentTypeValid = hasJsonContentType(request.headers);
+  const forbiddenHeader = hasDisallowedApplicationHeader(request.headers);
+  if (!contentTypeValid || forbiddenHeader) {
+    return json({
+      error: "invalid_request",
+      reason: contentTypeValid
+        ? "forbidden_request_header"
+        : "unsupported_content_type",
+    }, 400);
   }
   let body: unknown;
+  let bodyText: string;
   try {
-    const text = await request.text();
-    if (new TextEncoder().encode(text).length > 1024) throw new Error();
-    body = JSON.parse(text);
+    bodyText = await request.text();
   } catch {
-    return json({ error: "invalid_request" }, 400);
+    return json({ error: "invalid_request", reason: "invalid_json" }, 400);
+  }
+  if (isBodyTooLarge(bodyText)) {
+    return json({ error: "invalid_request", reason: "body_too_large" }, 400);
+  }
+  try {
+    body = JSON.parse(bodyText);
+  } catch {
+    return json({ error: "invalid_request", reason: "invalid_json" }, 400);
   }
   if (
     !body || Array.isArray(body) || typeof body !== "object" ||
     Object.keys(body).length !== 0
-  ) return json({ error: "invalid_request" }, 400);
+  ) {
+    return json({
+      error: "invalid_request",
+      reason: classifyRequestShape({
+        contentTypeValid: true,
+        forbiddenHeader: false,
+        bodyText,
+      }),
+    }, 400);
+  }
   try {
     const result = await dependencies.collect(
       dependencies.createClient(url!, service, {
