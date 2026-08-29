@@ -81,8 +81,11 @@ async function once() {
     await git(["commit", "-m", "feat: complete bounded agent task"], worktree);
     await git(["push", "-u", "origin", branch], worktree);
     const prBody = "## Issue\n\nCloses #" + issue.number + "\n\n## Summary\n\n" + sanitize(child.stdout).slice(-1000) + "\n\n## Changes\n\n- Child changed only contract-allowed paths.\n\n## Checks\n\n- [x] git diff --check\n\n## Migrations and configuration\n\nNone.\n\n## Screenshots\n\nNot applicable.\n\n## Risks and limitations\n\nBounded child execution; runtime deny policy preserved.\n\n## Rollback\n\nClose PR and preserve branch/worktree for review.\n\n## Handoff\n\nAgent Bridge parent handoff; human merge boundary.";
-    const pr = await jsonRun("gh", ["pr", "create", "--base", "main", "--head", branch, "--title", issue.title, "--body", prBody], worktree);
-    await handoff(issue.number, runId, branch, pr.number);
+    const prOutput = await gh(["pr", "create", "--base", "main", "--head", branch, "--title", issue.title, "--body", prBody]);
+    const prNumber = Number(prOutput.match(/\/pull\/(\d+)/)?.[1]);
+    if (!Number.isSafeInteger(prNumber) || prNumber < 1) throw new Error("pull_request_creation_failed");
+    const pr = { number: prNumber };
+    await handoff(issue.number, runId, branch, pr);
     console.log(JSON.stringify({ command: "once", runId, outcome: "handoff", issue: issue.number, branch, pullRequest: pr.number, changedPaths: changed }));
   } catch (error) {
     const message = sanitize(error?.message || error);
