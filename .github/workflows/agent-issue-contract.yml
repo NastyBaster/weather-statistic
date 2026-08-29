@@ -25,6 +25,7 @@ jobs:
             if (context.payload.action === 'edited' && !labels.includes('agent:validate')) return;
             if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') { await removeReady(); core.setFailed('agent:ready is workflow-owned'); return; }
             const missing = required.filter((h) => !complete(h));
+            if (!missing.includes('Allowed paths') && !/`[^`]+`/.test(body.match(/(?:^|\n)### Allowed paths[^\n]*\n([\s\S]*?)(?=\n### |$)/i)?.[1] || '')) missing.push('Allowed paths must use backtick syntax');
             if (missing.length) { await removeReady(); core.setFailed(`Incomplete agent contract: ${missing.join(', ')}`); return; }
             const digest = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
             const marker = `<!-- agent-contract:v1:${digest} -->`;
