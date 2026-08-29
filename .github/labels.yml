@@ -1,0 +1,14 @@
+- name: agent:validate
+  color: "5319E7"
+- name: agent:ready
+  color: "1D76DB"
+- name: agent:running
+  color: "FBCA04"
+- name: agent:review
+  color: "0E8A16"
+- name: agent:blocked
+  color: "B60205"
+- name: risk:high
+  color: "D93F0B"
+- name: area:bridge
+  color: "5319E7"

@@ -63,3 +63,6 @@ disable verification has occurred, and no development scheduler has been configu
 invoked. Stage 5.2.1 remains in progress and subject to its remaining development validation gate
 and separate production authorization. Production is unchanged. Observations, accuracy,
 geocoding, and other future functionality remain deferred.
+
+The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
+batch/watch execution and runtime operations remain excluded.

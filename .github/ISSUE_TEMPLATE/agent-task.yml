@@ -1,0 +1,51 @@
+name: Agent task
+description: Complete bounded task contract
+title: "[Agent] "
+body:
+  - type: markdown
+    attributes:
+      value: "Never include secrets, credentials, raw logs, or production data."
+  - type: textarea
+    id: goal
+    attributes: { label: Goal }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Context }
+    validations: { required: true }
+  - type: textarea
+    id: in-scope
+    attributes: { label: In scope }
+    validations: { required: true }
+  - type: textarea
+    id: out-of-scope
+    attributes: { label: Out of scope }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Acceptance criteria }
+    validations: { required: true }
+  - type: textarea
+    id: paths
+    attributes: { label: Allowed paths }
+    validations: { required: true }
+  - type: textarea
+    id: checks
+    attributes: { label: Required checks }
+    validations: { required: true }
+  - type: textarea
+    id: security
+    attributes: { label: Security constraints }
+    validations: { required: true }
+  - type: textarea
+    id: dependencies
+    attributes: { label: Dependencies }
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes: { label: Rollback }
+    validations: { required: true }
+  - type: textarea
+    id: runtime
+    attributes: { label: Runtime permission matrix }
+    validations: { required: true }

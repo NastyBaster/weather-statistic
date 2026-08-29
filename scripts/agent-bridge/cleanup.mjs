@@ -1,0 +1,1 @@
+export function cleanupDecision({ merged, clean, branchAttached, remoteExists }) { if (!merged) return { cleanup: "blocked", reason: "merge_not_verified" }; if (!clean) return { cleanup: "blocked", reason: "dirty_worktree" }; if (branchAttached) return { cleanup: "blocked", reason: "branch_attached" }; return { cleanup: "complete", remoteBranchDeleted: remoteExists }; }

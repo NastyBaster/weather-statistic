@@ -1,0 +1,3 @@
+import test from "node:test"; import assert from "node:assert/strict"; import { evaluateDoctor } from "../../scripts/agent-bridge/doctor-core.mjs";
+const healthy = { repository: "NastyBaster/weather-statistic", branch: "main", clean: true, synchronized: true, git: true, ghAuth: true, codex: true, workflows: true, labels: ["agent:validate", "agent:ready", "agent:running", "agent:review", "agent:blocked"], protection: true, runtimeEnabled: false, runtimeRootSafe: true };
+test("doctor healthy and unsafe cases", () => { assert.equal(evaluateDoctor(healthy).pass, true); assert.equal(evaluateDoctor({ ...healthy, branch: "feature" }).pass, false); assert.equal(evaluateDoctor({ ...healthy, runtimeEnabled: true }).pass, false); });
