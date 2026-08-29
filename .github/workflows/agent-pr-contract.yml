@@ -19,6 +19,7 @@ jobs:
             const substantive = (value) => String(value).replace(/<!--[\\s\\S]*?-->/g, '').trim();
             const missing = required.filter((h) => !substantive(section(h)) || /<!--|_No response_|<!-- exact command -->/i.test(section(h)));
             const tests = section('Tests');
-            if (!missing.includes('Tests') && (!/- \[x\] `[^`]+`/i.test(tests) || /- \[ \]/i.test(tests))) missing.push('checked test attestations');
+            const requiredTests = ['npm run test:bridge', 'npm run check', 'git diff --check'];
+            if (!missing.includes('Tests') && (!requiredTests.every((command) => tests.includes(`- [x] \`${command}\``)) || /- \[ \]/i.test(tests))) missing.push('required checked test attestations');
             if (missing.length) core.setFailed(`Incomplete PR report: ${missing.join(', ')}`);
             if (!/Closes #\d+/i.test(body)) core.setFailed('PR must link its issue');
