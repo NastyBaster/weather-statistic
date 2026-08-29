@@ -98,7 +98,11 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   const terminalizeNegativeEvidence = async (state, category, alreadyConsumed = false) => {
     let terminalCategory = category;
     try {
-      if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
+      if (!alreadyConsumed && state.phase === "manual_enqueue_required" && typeof binding.invalidateManualEnqueueState === "function") {
+        await binding.invalidateManualEnqueueState(state);
+      } else if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") {
+        await binding.invalidatePhaseState(state);
+      }
       try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
       catch (error) {
         terminalCategory = error?.message === "validation_artifact_path_unsafe"
@@ -275,6 +279,9 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         if (phaseConfirmed && terminalRejections.has(error?.message) && state) {
           let terminalCategory = "manual_evidence_rejected";
           try {
+            if (typeof binding.invalidateManualEnqueueState === "function") {
+              await binding.invalidateManualEnqueueState(state);
+            }
             await binding.writePhaseState(sanitizePhaseState({
               phase: "negative_evidence_failed_terminal",
               attempt_boundary: state.attempt_boundary,

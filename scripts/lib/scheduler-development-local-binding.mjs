@@ -266,6 +266,22 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     }
   }
 
+  async function invalidateManualEnqueueState(expectedState) {
+    if (!expectedState || expectedState.phase !== "manual_enqueue_required"
+      || !expectedState.attempt_boundary || !Number.isInteger(expectedState.scheduled_run_baseline)) {
+      fail("negative_evidence_terminalization_failed");
+    }
+    try {
+      await filesystem.rename(phaseStatePath, join(temporaryDirectory, "scheduler-phase-state.invalidated"));
+      await filesystem.writeFile(`${phaseStatePath}.tmp`, JSON.stringify({
+        phase: "negative_evidence_terminalizing", cleanup: "terminal",
+      }), { encoding: "utf8", mode: 0o600 });
+      await filesystem.rename(`${phaseStatePath}.tmp`, phaseStatePath);
+    } catch {
+      throw new Error("negative_evidence_terminalization_failed");
+    }
+  }
+
   async function consumeNegativeEvidenceState({ claimAlreadyHeld = false } = {}) {
     if (!claimAlreadyHeld) await acquireResumeClaim();
     let state;
@@ -477,5 +493,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     resumeClaimHeld = false;
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, invalidatePhaseState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, invalidatePhaseState, invalidateManualEnqueueState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
 }

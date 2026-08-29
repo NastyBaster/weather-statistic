@@ -48,6 +48,24 @@ assert.deepEqual(rejected.calls.order, [
   "acquire", "read", "write:negative_evidence_failed_terminal", "clear", "release",
 ]);
 
+const invalidation = binding({
+  async invalidateManualEnqueueState(state) {
+    assert.equal(state.phase, "manual_enqueue_required");
+    this.calls.order.push("invalidate");
+  },
+});
+await assert.rejects(runHybridDevelopment(args, invalidation), /manual_evidence_rejected/);
+assert.deepEqual(invalidation.calls.order, [
+  "acquire", "read", "invalidate", "write:negative_evidence_failed_terminal", "clear", "release",
+]);
+
+const invalidationFailure = binding({
+  async invalidateManualEnqueueState() { this.calls.order.push("invalidate"); throw new Error("rename failed"); },
+});
+await assert.rejects(runHybridDevelopment(args, invalidationFailure), /negative_evidence_terminalization_failed/);
+assert.equal(invalidationFailure.calls.writes.length, 0);
+assert.equal(invalidationFailure.calls.clears, 0);
+
 const completed = binding({ state: {
   phase: "manual_enqueue_complete", attempt_boundary: "2026-01-01T00:00:00Z",
   scheduled_run_baseline: 0, cleanup: "complete",
