@@ -14,6 +14,6 @@ jobs:
           script: |
             const body = context.payload.issue.body || '';
             const required = ['Goal','Context','In scope','Out of scope','Acceptance criteria','Allowed paths','Required checks','Security constraints','Dependencies','Rollback','Runtime permission matrix'];
-            const missing = required.filter((h) => !new RegExp(`### ${h}\\s*\\n+([^#]+)`, 'i').test(body));
+            const missing = required.filter((h) => !new RegExp(`### ${h}\s*\n+([^#]+)`, 'i').test(body));
             if (missing.length) core.setFailed(`Incomplete agent contract: ${missing.join(', ')}`);
             if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') core.setFailed('agent:ready is workflow-owned');

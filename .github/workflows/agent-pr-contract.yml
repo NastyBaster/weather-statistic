@@ -14,6 +14,6 @@ jobs:
           script: |
             const body = context.payload.pull_request.body || '';
             const required = ['Issue','Motivation','Scope','Parent/child security boundary','Runtime deny policy','Tests','Manual post-merge configuration','Explicit non-goals'];
-            const missing = required.filter((h) => !new RegExp(`## ${h}\\s*\\n+([^#]+)`, 'i').test(body));
+            const missing = required.filter((h) => !new RegExp(`## ${h}\s*\n+([^#]+)`, 'i').test(body));
             if (missing.length) core.setFailed(`Incomplete PR report: ${missing.join(', ')}`);
-            if (!/Closes #\\d+/i.test(body)) core.setFailed('PR must link its issue');
+            if (!/Closes #\d+/i.test(body)) core.setFailed('PR must link its issue');
