@@ -19,10 +19,10 @@ jobs:
             const required = ['Goal','Context','In scope','Out of scope','Acceptance criteria','Allowed paths','Required checks','Security constraints','Dependencies','Rollback','Runtime permission matrix'];
             const substantive = (value) => String(value || '').replace(/<!--[\s\S]*?-->/g, '').replace(/_No response_/gi, '').trim().length > 0;
             const complete = (heading) => { const match = body.match(new RegExp(`(?:^|\\n)### ${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n### |$)`, 'i')); return Boolean(match && substantive(match[1])); };
+            const removeReady = async () => { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name: 'agent:ready' }); } catch (e) { if (e.status !== 404) throw e; } };
             const labels = (await github.rest.issues.listLabelsOnIssue({ ...context.repo, issue_number: issue.number })).data.map((x) => x.name);
             if (context.payload.action === 'edited' && labels.includes('agent:ready')) { await removeReady(); core.setFailed('edited ready issue requires renewed validation'); return; }
             if (context.payload.action === 'edited' && !labels.includes('agent:validate')) return;
-            const removeReady = async () => { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name: 'agent:ready' }); } catch (e) { if (e.status !== 404) throw e; } };
             if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') { await removeReady(); core.setFailed('agent:ready is workflow-owned'); return; }
             const missing = required.filter((h) => !complete(h));
             if (missing.length) { await removeReady(); core.setFailed(`Incomplete agent contract: ${missing.join(', ')}`); return; }

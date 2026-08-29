@@ -1,9 +1,9 @@
 import os from "node:os";
 import path from "node:path";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize } from "./core.mjs";
+import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody } from "./core.mjs";
 import { acquireOwnership, ownerPresent } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
@@ -53,42 +53,55 @@ async function loadReadyIssue() {
 async function claim(number) { await gh(["issue", "edit", String(number), "--remove-label", "agent:ready", "--add-label", "agent:running", "--add-assignee", "@me"]); }
 async function block(number, message) { await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:blocked"]); await gh(["issue", "comment", String(number), "--body", "Bridge blocked: " + sanitize(message)]); }
 async function handoff(number, runId, branch, pr) { await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:review"]); await gh(["issue", "comment", String(number), "--body", "Bridge handoff: run " + runId + "; branch " + branch + "; PR #" + pr + "; sanitized audit stored locally."]); }
+async function writeAudit(runId, value) { const dir = path.join(runtimeRoot(), "runs"); await mkdir(dir, { recursive: true }); const safe = { runId, phase: value.phase || "unknown", issue: Number.isSafeInteger(value.issue) ? value.issue : null, branch: value.branch || null, childOutcome: value.childOutcome || null, changedPaths: Array.isArray(value.changedPaths) ? value.changedPaths : [], checks: Array.isArray(value.checks) ? value.checks : [], pr: Number.isSafeInteger(value.pr) ? value.pr : null, outcome: value.outcome || "blocked" }; await writeFile(path.join(dir, `${runId}.json`), JSON.stringify(safe), { flag: "wx", mode: 0o600 }); }
 async function runChild(prompt, cwd) { const invocation = await codexInvocation(); return run(invocation.command, [...invocation.args, "exec", "--ephemeral", prompt], cwd); }
 async function once() {
   const runId = "run-" + new Date().toISOString().replace(/[-:.TZ]/g, "") + "-" + randomBytes(4).toString("hex");
   if (config.dryRun) { console.log(JSON.stringify({ command: "once", runId, ...dryRunPlan(null) })); return; }
+  const doctor = await runDoctor(createRealDoctorAdapter(root), runtimeRoot());
+  if (!doctor.pass) { console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: "doctor_failed", mutations: 0, failures: doctor.failures })); process.exitCode = 1; return; }
   const ownership = await acquireOwnership(runtimeRoot(), { mode: "once", runId, dryRun: false });
   let issue; let worktree; let branch;
   try {
     issue = await loadReadyIssue();
     if (!issue) throw new Error("no_eligible_agent_ready_issue");
+    const contract = parseIssueContract(issue);
+    if (!contract.valid) throw new Error("invalid_issue_contract");
     await claim(issue.number);
     branch = safeBranch(issue);
     worktree = path.join(root, ".agent-bridge", "worktrees", branch.replaceAll("/", "-"));
     await mkdir(path.dirname(worktree), { recursive: true });
     await git(["worktree", "add", "-b", branch, worktree, "origin/main"]);
-    const allowedPaths = issueAllowedPaths(issue);
-    const prompt = promptFor(issue, { branch, worktree, allowedPaths });
+    const allowedPaths = contract.allowedPaths;
+    const prompt = promptFor(issue, { branch, worktree, allowedPaths, contract });
     const child = await runChild(prompt, worktree);
     if (!child.stdout.trim()) throw new Error("child_returned_no_summary");
     const status = await git(["status", "--short", "--untracked-files=all"], worktree);
     const changed = status.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3).trim()).filter(Boolean);
     const pathCheck = validateChangedPaths(changed, allowedPaths);
-    if (!pathCheck.valid || !changed.length) throw new Error("invalid_or_empty_child_changes:" + pathCheck.invalid.join(","));
-    await git(["diff", "--check"], worktree);
+    if (!pathCheck.valid || !changed.length) throw new Error("invalid_or_empty_child_changes");
+    const checks = validateRequiredChecks(contract.requiredChecks);
+    if (!checks.valid) throw new Error("unsafe_required_checks");
+    for (const check of checks.commands) {
+      if (check === "git diff --check") await git(["diff", "--check"], worktree);
+      else if (check === "npm run test:bridge") await run("npm.cmd", ["run", "test:bridge"], worktree);
+      else if (check === "npm run check") await run("npm.cmd", ["run", "check"], worktree);
+    }
     await git(["add", "--", ...changed], worktree);
     await git(["diff", "--cached", "--check"], worktree);
     await git(["commit", "-m", "feat: complete bounded agent task"], worktree);
     await git(["push", "-u", "origin", branch], worktree);
-    const prBody = "## Issue\n\nCloses #" + issue.number + "\n\n## Summary\n\n" + sanitize(child.stdout).slice(-1000) + "\n\n## Changes\n\n- Child changed only contract-allowed paths.\n\n## Checks\n\n- [x] git diff --check\n\n## Migrations and configuration\n\nNone.\n\n## Screenshots\n\nNot applicable.\n\n## Risks and limitations\n\nBounded child execution; runtime deny policy preserved.\n\n## Rollback\n\nClose PR and preserve branch/worktree for review.\n\n## Handoff\n\nAgent Bridge parent handoff; human merge boundary.";
-    const prOutput = await gh(["pr", "create", "--base", "main", "--head", branch, "--title", issue.title, "--body", prBody]);
+    const body = prBody(issue, checks.commands);
+    const prOutput = await gh(["pr", "create", "--base", "main", "--head", branch, "--title", issue.title, "--body", body]);
     const prNumber = Number(prOutput.match(/\/pull\/(\d+)/)?.[1]);
     if (!Number.isSafeInteger(prNumber) || prNumber < 1) throw new Error("pull_request_creation_failed");
     const pr = { number: prNumber };
+    await writeAudit(runId, { phase: "handoff", issue: issue.number, branch, childOutcome: "success", changedPaths: changed, checks: checks.commands, pr: prNumber, outcome: "handoff" });
     await handoff(issue.number, runId, branch, pr);
     console.log(JSON.stringify({ command: "once", runId, outcome: "handoff", issue: issue.number, branch, pullRequest: pr.number, changedPaths: changed }));
   } catch (error) {
     const message = sanitize(error?.message || error);
+    try { await writeAudit(runId, { phase: "blocked", issue: issue?.number, branch, childOutcome: "failed", outcome: "blocked" }); } catch { /* preserve sanitized block */ }
     if (issue?.number) await block(issue.number, message);
     console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", issue: issue?.number || null, branch: branch || null, error: message }));
     process.exitCode = 1;
