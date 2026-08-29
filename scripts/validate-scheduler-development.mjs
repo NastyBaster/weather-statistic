@@ -201,20 +201,27 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
     let claimed = false;
     let completed = false;
     let state;
+    let phaseConfirmed = false;
     try {
       if (typeof binding.acquireResumeClaim === "function") {
         await binding.acquireResumeClaim("scheduler_resume_claim_active");
         claimed = true;
       }
       state = await binding.readPhaseState();
+      if (state.phase === "manual_enqueue_complete") {
+        completed = true;
+        if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+        return sanitizePhaseState(state);
+      }
       if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") {
-        await binding.releaseResumeClaim();
-        claimed = false;
-        throw new Error("manual_evidence_rejected");
+        completed = true;
+        if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+        return sanitizePhaseState(state);
       }
       if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
         throw new Error("existing_negative_baseline_not_provable");
       }
+      phaseConfirmed = true;
       let evidence;
       try {
         evidence = parseEvidenceResult({
@@ -264,12 +271,9 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         const terminalRejections = new Set([
           "manual_evidence_invalid",
           "manual_evidence_rejected",
-          "existing_negative_baseline_not_provable",
         ]);
-        if (terminalRejections.has(error?.message) && state) {
-          let terminalCategory = error.message === "existing_negative_baseline_not_provable"
-            ? error.message
-            : "manual_evidence_rejected";
+        if (phaseConfirmed && terminalRejections.has(error?.message) && state) {
+          let terminalCategory = "manual_evidence_rejected";
           try {
             await binding.writePhaseState(sanitizePhaseState({
               phase: "negative_evidence_failed_terminal",
@@ -285,6 +289,13 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
               terminalCategory = cleanupError?.message === "validation_artifact_path_unsafe"
                 ? cleanupError.message
                 : "validation_artifact_cleanup_failed";
+              await binding.writePhaseState(sanitizePhaseState({
+                phase: "negative_evidence_failed_terminal",
+                attempt_boundary: state.attempt_boundary,
+                scheduled_run_baseline: state.scheduled_run_baseline,
+                negative_evidence_failure: terminalCategory,
+                cleanup: "manual_intervention_required",
+              }));
             }
             await binding.releaseResumeClaim();
             claimed = false;

@@ -94,6 +94,11 @@ non-resumable state, removes all attempt artifacts, and releases its claim only 
 There is no automatic retry or stale-claim bypass, and a later final resume cannot replay the
 rejected evidence.
 
+Repeated final-resume calls are immutable once completion or terminalization is durable: they
+return the recorded state without reparsing evidence or mutating artifacts. If artifact cleanup
+fails during terminalization, the terminal state records manual intervention as required and the
+sanitized cleanup category before claim release.
+
 Terminalization first atomically invalidates the resumable state and leaves a minimal tombstone;
 cleanup and detailed terminal-state persistence happen only afterward. Thus persistence or cleanup
 failures remain non-resumable and use the sanitized `validation_artifact_cleanup_failed` category
