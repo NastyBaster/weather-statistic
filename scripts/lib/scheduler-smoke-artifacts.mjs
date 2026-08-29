@@ -269,3 +269,44 @@ export const schedulerSmokeArtifactContract = Object.freeze({
   claimLockKey: CLAIM_LOCK_KEY,
   vaultSecretName: VAULT_SECRET_NAME,
 });
+
+export function buildTerminalDeliveryDiagnosisSql(attemptBoundary) {
+  if (typeof attemptBoundary !== "string" || !/^\d{4}-\d{2}-\d{2}T[^']+Z$/.test(attemptBoundary)) {
+    throw new Error("diagnosis_attempt_boundary_invalid");
+  }
+  const boundary = attemptBoundary.replaceAll("'", "''");
+  return `begin;
+set transaction read only;
+with candidates as (
+  select q.id as request_key, r.status_code, r.content
+  from net.http_request_queue q
+  join net._http_response r on r.id = q.id
+  where q.created >= '${boundary}'::timestamptz
+), parsed as (
+  select *, case when jsonb_typeof(content::jsonb) = 'object' then content::jsonb else null end as response_object
+  from candidates
+), aggregate as (
+  select count(*)::integer as correlation_candidate_count,
+    count(*)::integer as response_count,
+    max(status_code)::integer as http_status_code,
+    bool_and(response_object is not null) as response_json_valid,
+    max(response_object->>'error') filter (where response_object is not null) as error_value,
+    max(response_object->>'reason') filter (where response_object is not null) as reason_value
+  from parsed
+)
+select 'scheduler_delivery_diagnosis'::text as result_tag,
+  case when correlation_candidate_count = 1 then 'correlated' else 'ambiguous' end as delivery_category,
+  correlation_candidate_count, correlation_candidate_count <> 1 as correlation_ambiguous,
+  response_count, case when correlation_candidate_count = 1 then http_status_code else null end as http_status_code,
+  response_json_valid,
+  case when correlation_candidate_count = 1 and error_value in ('invalid_request','unauthorized','method_not_allowed','configuration_error','overlap','internal_error') then error_value else 'other' end as sanitized_error,
+  case when correlation_candidate_count = 1 and reason_value in ('unsupported_content_type','forbidden_request_header','body_too_large','invalid_json','body_must_be_object','body_must_be_empty') then reason_value else 'other' end as sanitized_reason,
+  (http_status_code between 200 and 299) as status_is_2xx,
+  (http_status_code between 400 and 499) as status_is_4xx,
+  (http_status_code between 500 and 599) as status_is_5xx,
+  0::integer as scheduled_run_count, 0::integer as active_run_count, 0::integer as snapshot_count, 0::integer as duplicate_identity_count,
+  true as response_body_accessed, false as response_body_rendered, false as response_headers_accessed,
+  false as request_body_accessed, false as authorization_accessed, false as raw_error_accessed
+from aggregate;
+rollback;`;
+}

@@ -7,6 +7,7 @@ import {
   buildEvidenceSql as buildBoundEvidenceSql,
   buildPreflightSql,
   buildNegativeEvidenceSql,
+  buildTerminalDeliveryDiagnosisSql,
   requireAttemptBoundary,
   requireBaseline,
 } from "./scheduler-smoke-artifacts.mjs";
@@ -194,7 +195,7 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
   const claimDirectory = join(dirname(temporaryDirectory), ".forecast-scheduler-validation-claim");
   const phaseStatePath = join(temporaryDirectory, "scheduler-phase-state.json");
   let resumeClaimHeld = false;
-  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-phase-state.json.tmp"]);
+  const artifactNames = new Set(["scheduler-phase-state.json", "scheduler-phase-state.invalidated", "scheduler-phase-state.consumed", "scheduler-resume-claim", "scheduler-pre-enqueue-preflight.sql", "scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-terminal-delivery-diagnosis.sql", "scheduler-pre-enqueue-preflight.sql.tmp", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp", "scheduler-terminal-delivery-diagnosis.sql.tmp", "scheduler-phase-state.json.tmp"]);
   const writeArtifactNames = new Set(["scheduler-negative-evidence.sql", "scheduler-exactly-once-enqueue.sql", "scheduler-post-enqueue-evidence.sql", "scheduler-negative-evidence.sql.tmp", "scheduler-exactly-once-enqueue.sql.tmp", "scheduler-post-enqueue-evidence.sql.tmp"]);
 
   async function ensureArtifactRoot() {
@@ -232,18 +233,52 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     try {
       if (resumeClaimHeld) fail("scheduler_resume_claim_active");
       await acquireResumeClaim("scheduler_resume_claim_active");
-      await removeArtifacts(artifactNames);
+      await removeArtifacts(new Set([...artifactNames].filter((name) => name !== "scheduler-terminal-delivery-diagnosis.sql" && name !== "scheduler-terminal-delivery-diagnosis.sql.tmp")));
     } catch (error) { if (error?.message === "validation_artifact_path_unsafe" || error?.message === "scheduler_resume_claim_active") throw error; if (error?.message === "validation_artifact_cleanup_failed" || error?.message === "scheduler_resume_claim_release_failed") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearAttemptArtifacts() {
     try {
-      await removeArtifacts(new Set([...artifactNames].filter((name) => name !== "scheduler-phase-state.json" && name !== "scheduler-resume-claim")));
+      await removeArtifacts(new Set([...artifactNames].filter((name) => !["scheduler-phase-state.json", "scheduler-resume-claim", "scheduler-terminal-delivery-diagnosis.sql", "scheduler-terminal-delivery-diagnosis.sql.tmp"].includes(name))));
     } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
   }
 
   async function clearWriteArtifacts() {
     try { await removeArtifacts(writeArtifactNames); } catch (error) { if (error?.message === "validation_artifact_path_unsafe") throw error; fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function writeTerminalDeliveryDiagnosisArtifact(attemptBoundary) {
+    await ensureArtifactRoot();
+    const path = join(temporaryDirectory, "scheduler-terminal-delivery-diagnosis.sql");
+    try { await filesystem.lstat(path); fail("terminal_delivery_diagnosis_already_prepared"); } catch (error) {
+      if (error?.message === "terminal_delivery_diagnosis_already_prepared") throw error;
+      if (error?.code !== "ENOENT") fail("validation_artifact_path_unsafe");
+    }
+    const sql = buildTerminalDeliveryDiagnosisSql(attemptBoundary);
+    await filesystem.writeFile(`${path}.tmp`, sql, { encoding: "utf8", mode: 0o600 });
+    await filesystem.rename(`${path}.tmp`, path);
+    return { kind: "terminal-delivery-diagnosis", name: "scheduler-terminal-delivery-diagnosis.sql" };
+  }
+
+  async function clearTerminalDeliveryDiagnosisArtifact() {
+    await ensureArtifactRoot();
+    const path = join(temporaryDirectory, "scheduler-terminal-delivery-diagnosis.sql");
+    try { await filesystem.unlink(path); }
+    catch (error) { if (error?.code === "ENOENT") fail("terminal_delivery_diagnosis_absent"); fail("validation_artifact_cleanup_failed"); }
+  }
+
+  async function inspectArtifactInventory() {
+    await ensureArtifactRoot();
+    const entries = typeof filesystem.readdir === "function" ? await filesystem.readdir(temporaryDirectory) : [];
+    const names = entries.map((entry) => typeof entry === "string" ? entry : entry.name);
+    const known = new Set(artifactNames);
+    const count = (name) => names.filter((entry) => entry === name).length;
+    return {
+      unexpectedEntries: names.filter((name) => !known.has(name)).length,
+      claimPresent: count("scheduler-resume-claim") > 0,
+      writeCapableArtifacts: names.filter((name) => writeArtifactNames.has(name)).length,
+      diagnosisArtifacts: count("scheduler-terminal-delivery-diagnosis.sql"),
+    };
   }
 
   async function acquireResumeClaim(conflictCategory = "negative_evidence_state_consume_failed") {
@@ -493,5 +528,5 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
     resumeClaimHeld = false;
   }
 
-  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, invalidatePhaseState, invalidateManualEnqueueState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
+  return { preflight, runNegativeCases, writePreflightArtifact, writeNegativeEvidenceArtifact, writeSqlArtifacts, writePhaseState, readPhaseState, inspectArtifactInventory, cleanupArtifacts, prepareAttempt, clearAttemptArtifacts, clearWriteArtifacts, writeTerminalDeliveryDiagnosisArtifact, clearTerminalDeliveryDiagnosisArtifact, invalidatePhaseState, invalidateManualEnqueueState, consumeNegativeEvidenceState, acquireResumeClaim, releaseResumeClaim };
 }

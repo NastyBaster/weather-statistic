@@ -82,6 +82,10 @@ export function sanitizeSchedulerValidationFailure(error) {
     "scheduler_resume_claim_release_failed",
     "scheduler_artifact_publication_failed",
     "validation_artifact_path_unsafe",
+    "terminal_delivery_diagnosis_already_prepared",
+    "terminal_delivery_diagnosis_absent",
+    "diagnosis_attempt_boundary_invalid",
+    "terminal_delivery_diagnosis_precondition_failed",
   ]);
   return { category: allowed.has(error?.message) ? error.message : "scheduler_validation_failed", retries: 0 };
 }
@@ -94,6 +98,42 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   const expectedDevelopment = parsed.development_name;
   const expectedProduction = parsed.production_name;
   if (!expectedDevelopment || !expectedProduction || expectedDevelopment === expectedProduction) throw new Error("development_target_required");
+
+  if (parsed.prepare_terminal_delivery_diagnosis) {
+    let claimed = false;
+    try {
+      await binding.acquireResumeClaim("scheduler_resume_claim_active"); claimed = true;
+      const state = await binding.readPhaseState();
+      const inventory = await binding.inspectArtifactInventory();
+      if (state.phase !== "negative_evidence_failed_terminal" || state.cleanup !== "complete"
+        || !state.attempt_boundary || inventory.claimPresent || inventory.writeCapableArtifacts !== 0
+        || inventory.unexpectedEntries !== 0) throw new Error("terminal_delivery_diagnosis_precondition_failed");
+      if (state.cumulative_enqueue_count !== undefined && state.cumulative_enqueue_count !== 1) {
+        throw new Error("terminal_delivery_diagnosis_precondition_failed");
+      }
+      const artifact = await binding.writeTerminalDeliveryDiagnosisArtifact(state.attempt_boundary);
+      await binding.releaseResumeClaim(); claimed = false;
+      return { category: "terminal_delivery_diagnosis_prepared", artifactKind: artifact.kind, artifactUnique: true, readOnly: true };
+    } catch (error) {
+      if (claimed) { try { await binding.releaseResumeClaim(); } catch { throw new Error("scheduler_resume_claim_release_failed"); } }
+      throw error;
+    }
+  }
+
+  if (parsed.clear_terminal_delivery_diagnosis) {
+    let claimed = false;
+    try {
+      await binding.acquireResumeClaim("scheduler_resume_claim_active"); claimed = true;
+      const state = await binding.readPhaseState();
+      if (state.phase !== "negative_evidence_failed_terminal") throw new Error("terminal_delivery_diagnosis_precondition_failed");
+      await binding.clearTerminalDeliveryDiagnosisArtifact();
+      await binding.releaseResumeClaim(); claimed = false;
+      return { category: "terminal_delivery_diagnosis_cleared" };
+    } catch (error) {
+      if (claimed) { try { await binding.releaseResumeClaim(); } catch { throw new Error("scheduler_resume_claim_release_failed"); } }
+      throw error;
+    }
+  }
 
   const terminalizeNegativeEvidence = async (state, category, alreadyConsumed = false) => {
     let terminalCategory = category;

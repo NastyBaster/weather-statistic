@@ -1,4 +1,4 @@
-const BOOLEAN_FLAGS = ["live-development", "hybrid-sql-editor", "confirm-development-smoke", "resume-after-manual-enqueue", "resume-after-manual-preflight", "resume-after-negative-evidence"];
+const BOOLEAN_FLAGS = ["live-development", "hybrid-sql-editor", "confirm-development-smoke", "resume-after-manual-enqueue", "resume-after-manual-preflight", "resume-after-negative-evidence", "prepare-terminal-delivery-diagnosis", "clear-terminal-delivery-diagnosis"];
 const VALUE_FLAGS = ["development-name", "production-name", "enqueue-committed", "new-scheduled-runs", "duplicate-identity-count", "counter-invariant", "attempt-boundary", "scheduled-run-baseline", "evidence-result-tag", "evidence-run-category", "terminal-scheduled-runs", "running-scheduled-runs", "terminal-status", "locations-total", "locations-succeeded", "locations-failed", "snapshots-created", "unexpected-active-scheduled-runs", "negative-evidence-result-tag", "negative-evidence-attempt-boundary", "negative-evidence-baseline", "negative-evidence-new-runs", "negative-evidence-active-runs", "negative-evidence-created-runs"];
 
 const envKey = (flag) => `npm_config_${flag.replaceAll("-", "_")}`;
@@ -41,6 +41,8 @@ export function parseSchedulerRuntimeArguments(argv = [], environment = {}) {
       if (name === "resume-after-manual-enqueue") parsed.resume = true;
       if (name === "resume-after-manual-preflight") parsed.resume_preflight = true;
       if (name === "resume-after-negative-evidence") parsed.resume_negative_evidence = true;
+      if (name === "prepare-terminal-delivery-diagnosis") parsed.prepare_terminal_delivery_diagnosis = true;
+      if (name === "clear-terminal-delivery-diagnosis") parsed.clear_terminal_delivery_diagnosis = true;
       continue;
     }
     const value = valueParts.join("=");

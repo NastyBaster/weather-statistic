@@ -105,6 +105,15 @@ failures remain non-resumable and use the sanitized `validation_artifact_cleanup
 when applicable. Manual intervention and a new authorized attempt with a new baseline are required;
 no live validation occurred in this correction.
 
+After a terminal attempt is durably recorded and its write-capable artifacts are cleaned, an
+optional `--prepare-terminal-delivery-diagnosis` mode may publish one allowlisted,
+attempt-bound, transactionally read-only delivery diagnosis artifact. It uses internal request /
+response correlation only, normalizes the top-level error and reason to the reviewed enums, and
+never projects identifiers, headers, credentials, or raw payloads. A separate
+`--clear-terminal-delivery-diagnosis` mode removes only that diagnosis artifact while retaining
+the durable terminal state; ambiguous correlation and unexpected entries fail closed. The SQL is
+intended for a manual read-only Dashboard boundary and is never executed by the harness.
+
 On resume, the negative-evidence state is exclusively consumed before submitted evidence is parsed.
 If that consume operation fails, no evidence is accepted or persisted and no artifact is generated;
 the original state remains available for a separately authorized recovery. Once consumed, the
