@@ -20,6 +20,9 @@ try {
   assert.equal(sql.includes("net.http_request_queue"), false);
   assert.match(sql, /pg_input_is_valid\(content, 'jsonb'\)/);
   assert.match(sql, /case when correlation_candidate_count = 1/);
+  assert.match(sql, /correlation_candidate_count = 0 then 'uncorrelated'/);
+  assert.match(sql, /correlation_candidate_count > 1 as correlation_ambiguous/);
+  assert.match(sql, /correlation_candidate_count = 1 and http_status_code between 200 and 299/);
   assert.match(sql, /sanitized_error/);
   assert.match(sql, /sanitized_reason/);
   await assert.rejects(binding.writeTerminalDeliveryDiagnosisArtifact("2026-08-29T00:00:00Z"), /already_prepared/);

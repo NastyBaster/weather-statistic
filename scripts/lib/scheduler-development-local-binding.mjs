@@ -269,8 +269,15 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (error?.code === "EEXIST") fail("validation_artifact_path_unsafe");
       throw error;
     } finally { await handle?.close(); }
-    try { await filesystem.lstat(path); fail("terminal_delivery_diagnosis_already_prepared"); }
-    catch (error) { if (error?.message === "terminal_delivery_diagnosis_already_prepared") { await unlink(staged); throw error; } if (error?.code !== "ENOENT") { await unlink(staged); fail("validation_artifact_path_unsafe"); } }
+    try {
+      const finalStat = await filesystem.lstat(path);
+      if (finalStat.isSymbolicLink?.() || finalStat.isDirectory?.() || !finalStat.isFile?.()) { await unlink(staged); fail("validation_artifact_path_unsafe"); }
+      await unlink(staged);
+      fail("terminal_delivery_diagnosis_already_prepared");
+    } catch (error) {
+      if (error?.message === "terminal_delivery_diagnosis_already_prepared" || error?.message === "validation_artifact_path_unsafe") throw error;
+      if (error?.code !== "ENOENT") { await unlink(staged); fail("validation_artifact_path_unsafe"); }
+    }
     await filesystem.rename(staged, path);
     return { kind: "terminal-delivery-diagnosis", name: "scheduler-terminal-delivery-diagnosis.sql" };
   }

@@ -296,15 +296,15 @@ with candidates as (
   from parsed
 )
 select 'scheduler_delivery_diagnosis'::text as result_tag,
-  case when correlation_candidate_count = 1 then 'correlated' else 'ambiguous' end as delivery_category,
-  correlation_candidate_count, correlation_candidate_count <> 1 as correlation_ambiguous,
+  case when correlation_candidate_count = 0 then 'uncorrelated' when correlation_candidate_count = 1 then 'correlated' else 'ambiguous' end as delivery_category,
+  correlation_candidate_count, correlation_candidate_count > 1 as correlation_ambiguous,
   response_count, case when correlation_candidate_count = 1 then http_status_code else null end as http_status_code,
   response_json_valid,
   case when correlation_candidate_count = 1 and error_value in ('invalid_request','unauthorized','method_not_allowed','configuration_error','overlap','internal_error') then error_value when correlation_candidate_count = 1 then 'other' else null end as sanitized_error,
   case when correlation_candidate_count = 1 and reason_value in ('unsupported_content_type','forbidden_request_header','body_too_large','invalid_json','body_must_be_object','body_must_be_empty') then reason_value when correlation_candidate_count = 1 then 'other' else null end as sanitized_reason,
-  (http_status_code between 200 and 299) as status_is_2xx,
-  (http_status_code between 400 and 499) as status_is_4xx,
-  (http_status_code between 500 and 599) as status_is_5xx,
+  (correlation_candidate_count = 1 and http_status_code between 200 and 299) as status_is_2xx,
+  (correlation_candidate_count = 1 and http_status_code between 400 and 499) as status_is_4xx,
+  (correlation_candidate_count = 1 and http_status_code between 500 and 599) as status_is_5xx,
   0::integer as scheduled_run_count, 0::integer as active_run_count, 0::integer as snapshot_count, 0::integer as duplicate_identity_count,
   true as response_body_accessed, false as response_body_rendered, false as response_headers_accessed,
   false as request_body_accessed, false as authorization_accessed, false as raw_error_accessed
