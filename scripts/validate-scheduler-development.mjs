@@ -277,7 +277,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
           "manual_evidence_rejected",
         ]);
         if (phaseConfirmed && terminalRejections.has(error?.message) && state) {
-          let terminalCategory = "manual_evidence_rejected";
+          let terminalCategory = error.message;
           try {
             if (typeof binding.invalidateManualEnqueueState === "function") {
               await binding.invalidateManualEnqueueState(state);

@@ -48,6 +48,12 @@ assert.deepEqual(rejected.calls.order, [
   "acquire", "read", "write:negative_evidence_failed_terminal", "clear", "release",
 ]);
 
+const malformed = binding();
+const malformedArgs = args.map((value) => value === "--evidence-result-tag=scheduler_smoke_evidence"
+  ? "--evidence-result-tag=invalid" : value);
+await assert.rejects(runHybridDevelopment(malformedArgs, malformed), /manual_evidence_invalid/);
+assert.equal(malformed.calls.writes.at(-1).negative_evidence_failure, "manual_evidence_invalid");
+
 const invalidation = binding({
   async invalidateManualEnqueueState(state) {
     assert.equal(state.phase, "manual_enqueue_required");
