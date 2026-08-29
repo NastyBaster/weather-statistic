@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 
 export const RUNTIME_DENY = Object.freeze({ sql: false, http: false, pgNet: false, collector: false, deploy: false, secrets: false, migrations: false, cron: false, production: false });
 export const defaults = Object.freeze({ dryRun: true, autoMerge: false, concurrency: 1 });
@@ -8,7 +9,10 @@ export function sanitize(value) { return String(value ?? "").replace(/(?:gh[pous
 export function normalizeRepoPath(value) { const raw = String(value ?? "").replaceAll("\\", "/"); if (!raw || raw.startsWith("/") || /^[A-Za-z]:\//.test(raw) || raw.split("/").includes("..")) return null; return raw.replace(/^\.\//, ""); }
 export function validateChangedPaths(paths, permitted = allowedPaths) { const normalized = paths.map(normalizeRepoPath); const invalid = normalized.map((p, i) => p && permitted.some((a) => a.endsWith("/") ? p.startsWith(a) : p === a) ? null : paths[i]).filter(Boolean); return { valid: invalid.length === 0, invalid }; }
 export function issueAllowedPaths(issue) { const body = String(issue?.body ?? ""); const section = body.match(/### Allowed paths\s*([\s\S]*?)(?=\n### |$)/i)?.[1] ?? ""; return [...section.matchAll(/`([^`]+)`/g)].map((m) => m[1]).filter(Boolean); }
-export function eligible(issue) { const labels = (issue?.labels ?? []).map((l) => l.name); return labels.includes("agent:ready") && !labels.some((l) => ["agent:running", "agent:review", "agent:blocked"].includes(l)); }
+export function normalizeIssueBody(body) { return String(body ?? "").replace(/\r\n/g, "\n").trim(); }
+export function issueBodyDigest(body) { return createHash("sha256").update(normalizeIssueBody(body), "utf8").digest("hex"); }
+export function validationEvidenceMatches(issue) { const evidence = issue?.validationEvidence; return Boolean(evidence?.author === "github-actions[bot]" && evidence?.version === "v1" && evidence?.digest === issueBodyDigest(issue?.body)); }
+export function eligible(issue) { const labels = (issue?.labels ?? []).map((l) => l.name); return labels.includes("agent:ready") && !labels.some((l) => ["agent:running", "agent:review", "agent:blocked"].includes(l)) && validationEvidenceMatches(issue); }
 export function parseConfig(args = [], env = process.env) { return { ...defaults, dryRun: args.includes("--dry-run") || env.BRIDGE_DRY_RUN !== "false" }; }
 export function branchFor(issue) { return `agent/${issue.number}-${String(issue.title ?? "task").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "bridge-task"}`; }
 export function codexCommand(platform = process.platform) { return platform === "win32" ? "codex.cmd" : "codex"; }

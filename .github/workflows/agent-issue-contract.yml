@@ -7,13 +7,27 @@ permissions:
   issues: write
 jobs:
   validate:
+    if: github.event.action == 'edited' || github.event.label.name == 'agent:validate' || github.event.label.name == 'agent:ready'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
         with:
           script: |
-            const body = context.payload.issue.body || '';
+            const crypto = require('crypto');
+            const issue = context.payload.issue;
+            const body = String(issue.body || '').replace(/\r\n/g, '\n').trim();
             const required = ['Goal','Context','In scope','Out of scope','Acceptance criteria','Allowed paths','Required checks','Security constraints','Dependencies','Rollback','Runtime permission matrix'];
-            const missing = required.filter((h) => !new RegExp(`### ${h}\s*\n+([^#]+)`, 'i').test(body));
-            if (missing.length) core.setFailed(`Incomplete agent contract: ${missing.join(', ')}`);
-            if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') core.setFailed('agent:ready is workflow-owned');
+            const complete = (heading) => new RegExp(`(?:^|\\n)### ${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n### |$)`, 'i').test(body);
+            const labels = (await github.rest.issues.listLabelsOnIssue({ ...context.repo, issue_number: issue.number })).data.map((x) => x.name);
+            const removeReady = async () => { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name: 'agent:ready' }); } catch (e) { if (e.status !== 404) throw e; } };
+            if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') { await removeReady(); core.setFailed('agent:ready is workflow-owned'); return; }
+            const missing = required.filter((h) => !complete(h));
+            if (missing.length) { await removeReady(); core.setFailed(`Incomplete agent contract: ${missing.join(', ')}`); return; }
+            const digest = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+            const marker = `<!-- agent-contract:v1:${digest} -->`;
+            const comments = (await github.rest.issues.listComments({ ...context.repo, issue_number: issue.number, per_page: 100 })).data;
+            const prior = comments.filter((c) => c.user?.login === 'github-actions[bot]' && c.body?.startsWith('<!-- agent-contract:v1:'));
+            for (const comment of prior) if (comment.body !== marker) await github.rest.issues.updateComment({ ...context.repo, comment_id: comment.id, body: `<!-- agent-contract:stale -->` });
+            const current = prior.find((c) => c.body === marker);
+            if (!current) await github.rest.issues.createComment({ ...context.repo, issue_number: issue.number, body: marker });
+            if (!labels.includes('agent:ready')) await github.rest.issues.addLabels({ ...context.repo, issue_number: issue.number, labels: ['agent:ready'] });
