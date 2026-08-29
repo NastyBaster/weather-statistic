@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -111,9 +111,13 @@ export function immutableNegativeRecords(records) {
 }
 
 export function sanitizePhaseState(state) {
-  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "negative_evidence_required", "negative_evidence_passed", "negative_evidence_failure"];
+  const allowed = ["phase", "negative", "manual_enqueue_required", "resume_ready", "cleanup", "attempt_boundary", "scheduled_run_baseline", "cumulative_enqueue_count", "negative_evidence_required", "negative_evidence_passed", "negative_evidence_failure"];
   const output = {};
   for (const key of allowed) if (key in state) output[key] = state[key];
+  if ("cumulative_enqueue_count" in output
+    && (!Number.isInteger(output.cumulative_enqueue_count) || output.cumulative_enqueue_count < 0 || output.cumulative_enqueue_count > 1)) {
+    fail("phase_state_enqueue_count_invalid");
+  }
   return JSON.parse(JSON.stringify(output));
 }
 
@@ -255,8 +259,19 @@ export function createSchedulerDevelopmentLocalBinding(dependencies = {}) {
       if (error?.code !== "ENOENT") fail("validation_artifact_path_unsafe");
     }
     const sql = buildTerminalDeliveryDiagnosisSql(attemptBoundary);
-    await filesystem.writeFile(`${path}.tmp`, sql, { encoding: "utf8", mode: 0o600 });
-    await filesystem.rename(`${path}.tmp`, path);
+    const staged = `${path}.tmp`;
+    let handle;
+    try {
+      handle = await open(staged, "wx", 0o600);
+      await handle.writeFile(sql, { encoding: "utf8" });
+      await handle.sync();
+    } catch (error) {
+      if (error?.code === "EEXIST") fail("validation_artifact_path_unsafe");
+      throw error;
+    } finally { await handle?.close(); }
+    try { await filesystem.lstat(path); fail("terminal_delivery_diagnosis_already_prepared"); }
+    catch (error) { if (error?.message === "terminal_delivery_diagnosis_already_prepared") { await unlink(staged); throw error; } if (error?.code !== "ENOENT") { await unlink(staged); fail("validation_artifact_path_unsafe"); } }
+    await filesystem.rename(staged, path);
     return { kind: "terminal-delivery-diagnosis", name: "scheduler-terminal-delivery-diagnosis.sql" };
   }
 

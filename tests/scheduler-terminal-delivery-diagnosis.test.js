@@ -8,7 +8,7 @@ import { runHybridDevelopment } from "../scripts/validate-scheduler-development.
 const root = await mkdtemp(join(tmpdir(), "scheduler-diagnosis-test-"));
 try {
   const binding = createSchedulerDevelopmentLocalBinding({ temporaryDirectory: root });
-  await binding.writePhaseState({ phase: "negative_evidence_failed_terminal", cleanup: "complete", attempt_boundary: "2026-08-29T00:00:00Z" });
+  await binding.writePhaseState({ phase: "negative_evidence_failed_terminal", cleanup: "complete", cumulative_enqueue_count: 1, attempt_boundary: "2026-08-29T00:00:00Z" });
   const prepared = await binding.writeTerminalDeliveryDiagnosisArtifact("2026-08-29T00:00:00Z");
   assert.equal(prepared.kind, "terminal-delivery-diagnosis");
   const inventory = await binding.inspectArtifactInventory();
@@ -30,7 +30,7 @@ try {
   const preservedRoot = await mkdtemp(join(tmpdir(), "scheduler-diagnosis-preserve-"));
   try {
     const preserved = createSchedulerDevelopmentLocalBinding({ temporaryDirectory: preservedRoot });
-    await preserved.writePhaseState({ phase: "negative_evidence_failed_terminal", cleanup: "complete", attempt_boundary: "2026-08-29T00:00:00Z" });
+    await preserved.writePhaseState({ phase: "negative_evidence_failed_terminal", cleanup: "complete", cumulative_enqueue_count: 1, attempt_boundary: "2026-08-29T00:00:00Z" });
     await preserved.writeTerminalDeliveryDiagnosisArtifact("2026-08-29T00:00:00Z");
     await preserved.clearAttemptArtifacts();
     assert.equal((await readdir(preservedRoot)).includes("scheduler-terminal-delivery-diagnosis.sql"), true);
@@ -39,7 +39,7 @@ try {
   const calls = [];
   const orchestrationBinding = {
     async acquireResumeClaim() { calls.push("acquire"); },
-    async readPhaseState() { calls.push("read"); return { phase: "negative_evidence_failed_terminal", cleanup: "complete", attempt_boundary: "2026-08-29T00:00:00Z" }; },
+    async readPhaseState() { calls.push("read"); return { phase: "negative_evidence_failed_terminal", cleanup: "complete", cumulative_enqueue_count: 1, attempt_boundary: "2026-08-29T00:00:00Z" }; },
     async inspectArtifactInventory() { calls.push("inspect"); return { claimPresent: false, writeCapableArtifacts: 0, unexpectedEntries: 0 }; },
     async writeTerminalDeliveryDiagnosisArtifact(boundary) { calls.push(`write:${boundary}`); return { kind: "terminal-delivery-diagnosis" }; },
     async releaseResumeClaim() { calls.push("release"); },

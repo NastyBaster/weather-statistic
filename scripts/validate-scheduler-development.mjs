@@ -86,6 +86,7 @@ export function sanitizeSchedulerValidationFailure(error) {
     "terminal_delivery_diagnosis_absent",
     "diagnosis_attempt_boundary_invalid",
     "terminal_delivery_diagnosis_precondition_failed",
+    "phase_state_enqueue_count_invalid",
   ]);
   return { category: allowed.has(error?.message) ? error.message : "scheduler_validation_failed", retries: 0 };
 }
@@ -108,7 +109,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       if (state.phase !== "negative_evidence_failed_terminal" || state.cleanup !== "complete"
         || !state.attempt_boundary || inventory.claimPresent || inventory.writeCapableArtifacts !== 0
         || inventory.unexpectedEntries !== 0) throw new Error("terminal_delivery_diagnosis_precondition_failed");
-      if (state.cumulative_enqueue_count !== undefined && state.cumulative_enqueue_count !== 1) {
+      if (state.cumulative_enqueue_count !== 1) {
         throw new Error("terminal_delivery_diagnosis_precondition_failed");
       }
       const artifact = await binding.writeTerminalDeliveryDiagnosisArtifact(state.attempt_boundary);
@@ -305,6 +306,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
         phase: "manual_enqueue_complete",
         attempt_boundary: state.attempt_boundary,
         scheduled_run_baseline: state.scheduled_run_baseline,
+        cumulative_enqueue_count: 1,
         cleanup: "complete",
       }));
       completed = true;
@@ -326,6 +328,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
               phase: "negative_evidence_failed_terminal",
               attempt_boundary: state.attempt_boundary,
               scheduled_run_baseline: state.scheduled_run_baseline,
+              ...(state.cumulative_enqueue_count === undefined ? {} : { cumulative_enqueue_count: state.cumulative_enqueue_count }),
               negative_evidence_failure: terminalCategory,
               cleanup: "manual_intervention_required",
             }));
@@ -340,6 +343,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
                 phase: "negative_evidence_failed_terminal",
                 attempt_boundary: state.attempt_boundary,
                 scheduled_run_baseline: state.scheduled_run_baseline,
+                ...(state.cumulative_enqueue_count === undefined ? {} : { cumulative_enqueue_count: state.cumulative_enqueue_count }),
                 negative_evidence_failure: terminalCategory,
                 cleanup: "manual_intervention_required",
               }));
@@ -349,6 +353,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
                 phase: "negative_evidence_failed_terminal",
                 attempt_boundary: state.attempt_boundary,
                 scheduled_run_baseline: state.scheduled_run_baseline,
+                ...(state.cumulative_enqueue_count === undefined ? {} : { cumulative_enqueue_count: state.cumulative_enqueue_count }),
                 negative_evidence_failure: terminalCategory,
                 cleanup: "complete",
               }));
