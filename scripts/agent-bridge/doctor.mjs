@@ -3,7 +3,7 @@ import { access, lstat } from "node:fs/promises";
 import { runChild, sanitize } from "./core.mjs";
 import { ownerPresent } from "./ownership.mjs";
 import { expectedLabels, evaluateDoctor } from "./doctor-core.mjs";
-const expectedProtectedChecks = ["CI", "Deploy"];
+const expectedProtectedChecks = ["check", "deploy", "validate"];
 export const committedWorkflows = [".github/workflows/agent-issue-contract.yml", ".github/workflows/agent-pr-contract.yml"];
 const command = async (args, cwd) => { try { const result = await runChild(args[0], args.slice(1), { cwd }); return { ok: result.code === 0, output: result.output }; } catch { return { ok: false, output: "" }; } };
 const canonicalOrigin = (value) => { try { const raw = String(value || "").trim(); const normalized = raw.startsWith("git@github.com:") ? `https://github.com/${raw.slice("git@github.com:".length)}` : raw; const url = new URL(normalized); const repositoryPath = url.pathname.replace(/\.git$/i, "").toLowerCase(); return url.protocol === "https:" && url.hostname.toLowerCase() === "github.com" && repositoryPath === "/nastybaster/weather-statistic"; } catch { return false; } };
@@ -18,7 +18,7 @@ export function createRealDoctorAdapter(root = process.cwd()) { return {
   codex: async () => (await command([process.platform === "win32" ? "where.exe" : "which", "codex"], root)).ok,
   ghAuth: async () => (await command(["gh", "auth", "status"], root)).ok,
   labels: async () => { const r = await command(["gh", "label", "list", "--repo", "NastyBaster/weather-statistic", "--limit", "100", "--json", "name"], root); try { return r.ok ? JSON.parse(r.output).map((x) => x.name) : []; } catch { return []; } },
-  protection: async () => { const r = await command(["gh", "api", "repos/NastyBaster/weather-statistic/branches/main/protection"], root); if (!r.ok) return false; try { const value = JSON.parse(r.output); const contexts = value.required_status_checks?.contexts || []; return Boolean(value.required_pull_request_reviews && value.allow_force_pushes?.enabled === false && expectedProtectedChecks.every((check) => contexts.includes(check))); } catch { return false; } },
+  protection: async () => { const r = await command(["gh", "api", "repos/NastyBaster/weather-statistic/branches/main/protection"], root); if (!r.ok) return false; try { const value = JSON.parse(r.output); const contexts = value.required_status_checks?.contexts || []; return Boolean(value.required_pull_request_reviews && value.allow_force_pushes?.enabled === false && value.enforce_admins?.enabled === true && expectedProtectedChecks.every((check) => contexts.includes(check))); } catch { return false; } },
   workflows: async () => (await Promise.all(committedWorkflows.map((f) => access(path.join(root, f)).then(() => true).catch(() => false)))).every(Boolean),
   runtimeRootSafe: async (rootPath) => { try { const s = await lstat(rootPath); return s.isDirectory() && !s.isSymbolicLink(); } catch (e) { return e.code === "ENOENT"; } },
   ownerPresent: async (rootPath) => ownerPresent(rootPath),
