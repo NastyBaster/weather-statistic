@@ -17,3 +17,4 @@ test("issue readiness requires current bot-authored digest marker", () => {
   assert.equal(validationEvidenceMatches({ body, validationEvidence: { ...evidence, author: "human" } }), false);
 });
 test("issue workflow requires substantive backtick allowed paths", async () => { const source = await readFile(".github/workflows/agent-issue-contract.yml", "utf8"); assert.match(source, /Allowed paths must use backtick syntax/); assert.ok(source.includes("replace(/<!--[\\s\\S]*?-->/g")); });
+test("issue readiness invalidation removes stale labels and exact checks are enforced", async () => { const source = await readFile(".github/workflows/agent-issue-contract.yml", "utf8"); assert.match(source, /removeValidate/); assert.match(source, /Required checks must be exactly the approved commands/); assert.match(source, /npm run test:bridge/); assert.match(source, /git diff --check/); });

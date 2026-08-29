@@ -31,7 +31,7 @@ body:
     validations: { required: true }
   - type: textarea
     id: checks
-    attributes: { label: Required checks }
+    attributes: { label: Required checks, description: "Use exactly these backtick commands: `npm run test:bridge`, `npm run check`, `git diff --check`" }
     validations: { required: true }
   - type: textarea
     id: security

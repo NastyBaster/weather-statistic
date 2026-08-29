@@ -3,7 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody } from "./core.mjs";
+import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath } from "./core.mjs";
 import { acquireOwnership, ownerPresent } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
@@ -51,7 +51,8 @@ async function loadReadyIssue() {
   return null;
 }
 async function claim(number) { await gh(["issue", "edit", String(number), "--remove-label", "agent:ready", "--add-label", "agent:running", "--add-assignee", "@me"]); }
-async function block(number, message) { await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:blocked"]); await gh(["issue", "comment", String(number), "--body", "Bridge blocked: " + sanitize(message)]); }
+const failureCategories = new Set(["doctor_failed", "no_eligible_issue", "invalid_issue_contract", "child_failed", "unsafe_changed_paths", "required_checks_failed", "commit_or_push_failed", "pull_request_creation_failed", "bridge_execution_failed"]);
+async function block(number, category = "bridge_execution_failed") { const safeCategory = failureCategories.has(category) ? category : "bridge_execution_failed"; await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:blocked"]); await gh(["issue", "comment", String(number), "--body", `Bridge blocked: category=${safeCategory}`]); }
 async function handoff(number, runId, branch, pr) { await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:review"]); await gh(["issue", "comment", String(number), "--body", "Bridge handoff: run " + runId + "; branch " + branch + "; PR #" + pr + "; sanitized audit stored locally."]); }
 async function writeAudit(runId, value) { const dir = path.join(runtimeRoot(), "runs"); await mkdir(dir, { recursive: true }); const safe = { runId, phase: value.phase || "unknown", issue: Number.isSafeInteger(value.issue) ? value.issue : null, branch: value.branch || null, childOutcome: value.childOutcome || null, changedPaths: Array.isArray(value.changedPaths) ? value.changedPaths : [], checks: Array.isArray(value.checks) ? value.checks : [], pr: Number.isSafeInteger(value.pr) ? value.pr : null, outcome: value.outcome || "blocked" }; await writeFile(path.join(dir, `${runId}.json`), JSON.stringify(safe), { flag: "wx", mode: 0o600 }); }
 async function runChild(prompt, cwd) { const invocation = await codexInvocation(); return run(invocation.command, [...invocation.args, "exec", "--ephemeral", prompt], cwd); }
@@ -69,7 +70,7 @@ async function once() {
     if (!contract.valid) throw new Error("invalid_issue_contract");
     await claim(issue.number);
     branch = safeBranch(issue);
-    worktree = path.join(root, ".agent-bridge", "worktrees", branch.replaceAll("/", "-"));
+    worktree = worktreePath(root, runtimeRoot(), branch);
     await mkdir(path.dirname(worktree), { recursive: true });
     await git(["worktree", "add", "-b", branch, worktree, "origin/main"]);
     const allowedPaths = contract.allowedPaths;
@@ -79,7 +80,7 @@ async function once() {
     const status = await git(["status", "--short", "--untracked-files=all"], worktree);
     const changed = status.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3).trim()).filter(Boolean);
     const pathCheck = validateChangedPaths(changed, allowedPaths);
-    if (!pathCheck.valid || !changed.length) throw new Error("invalid_or_empty_child_changes");
+    if (!pathCheck.valid || !changed.length) throw new Error("unsafe_changed_paths");
     const checks = validateRequiredChecks(contract.requiredChecks);
     if (!checks.valid) throw new Error("unsafe_required_checks");
     for (const check of checks.commands) {
@@ -102,7 +103,7 @@ async function once() {
   } catch (error) {
     const message = sanitize(error?.message || error);
     try { await writeAudit(runId, { phase: "blocked", issue: issue?.number, branch, childOutcome: "failed", outcome: "blocked" }); } catch { /* preserve sanitized block */ }
-    if (issue?.number) await block(issue.number, message);
+    if (issue?.number) await block(issue.number, "bridge_execution_failed");
     console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", issue: issue?.number || null, branch: branch || null, error: message }));
     process.exitCode = 1;
   } finally {
