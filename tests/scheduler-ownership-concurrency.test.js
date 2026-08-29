@@ -105,5 +105,5 @@ await winner;
 const releaseClaim = sharedClaim();
 const releaseCalls = { claims: 0, releases: 0, reads: 0, deletes: 0, writes: 0 };
 await assert.rejects(runHybridDevelopment(finalArgs.map((arg) => arg.replace("--new-scheduled-runs=1", "--new-scheduled-runs=0")), finalBinding(releaseClaim, releaseCalls, { release: async () => { throw new Error("scheduler_resume_claim_release_failed"); } })), /scheduler_resume_claim_release_failed/);
-assert.deepEqual([releaseCalls.reads, releaseCalls.deletes, releaseCalls.writes, releaseCalls.releases], [1, 0, 0, 1]);
+assert.deepEqual([releaseCalls.reads, releaseCalls.deletes, releaseCalls.writes, releaseCalls.releases], [1, 1, 2, 1]);
 console.log("scheduler ownership concurrency: 7 fixtures, 7 passed, 0 failed, 0 skipped, 0 not-run");

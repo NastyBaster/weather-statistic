@@ -98,7 +98,11 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   const terminalizeNegativeEvidence = async (state, category, alreadyConsumed = false) => {
     let terminalCategory = category;
     try {
-      if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") await binding.invalidatePhaseState(state);
+      if (!alreadyConsumed && state.phase === "manual_enqueue_required" && typeof binding.invalidateManualEnqueueState === "function") {
+        await binding.invalidateManualEnqueueState(state);
+      } else if (!alreadyConsumed && state.phase === "read_only_negative_evidence_required" && typeof binding.invalidatePhaseState === "function") {
+        await binding.invalidatePhaseState(state);
+      }
       try { if (typeof binding.clearWriteArtifacts === "function") await binding.clearWriteArtifacts(); }
       catch (error) {
         terminalCategory = error?.message === "validation_artifact_path_unsafe"
@@ -200,15 +204,28 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   if (parsed.resume) {
     let claimed = false;
     let completed = false;
+    let state;
+    let phaseConfirmed = false;
     try {
       if (typeof binding.acquireResumeClaim === "function") {
         await binding.acquireResumeClaim("scheduler_resume_claim_active");
         claimed = true;
       }
-      const state = await binding.readPhaseState();
+      state = await binding.readPhaseState();
+      if (state.phase === "manual_enqueue_complete") {
+        completed = true;
+        if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+        return sanitizePhaseState(state);
+      }
+      if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") {
+        completed = true;
+        if (claimed) { await binding.releaseResumeClaim(); claimed = false; }
+        return sanitizePhaseState(state);
+      }
       if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
         throw new Error("existing_negative_baseline_not_provable");
       }
+      phaseConfirmed = true;
       let evidence;
       try {
         evidence = parseEvidenceResult({
@@ -255,6 +272,55 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       return resumed;
     } catch (error) {
       if (claimed && !completed) {
+        const terminalRejections = new Set([
+          "manual_evidence_invalid",
+          "manual_evidence_rejected",
+        ]);
+        if (phaseConfirmed && terminalRejections.has(error?.message) && state) {
+          let terminalCategory = error.message;
+          try {
+            if (typeof binding.invalidateManualEnqueueState === "function") {
+              await binding.invalidateManualEnqueueState(state);
+            }
+            await binding.writePhaseState(sanitizePhaseState({
+              phase: "negative_evidence_failed_terminal",
+              attempt_boundary: state.attempt_boundary,
+              scheduled_run_baseline: state.scheduled_run_baseline,
+              negative_evidence_failure: terminalCategory,
+              cleanup: "manual_intervention_required",
+            }));
+            try {
+              if (typeof binding.clearAttemptArtifacts === "function") await binding.clearAttemptArtifacts();
+              else await binding.cleanupArtifacts();
+            } catch (cleanupError) {
+              terminalCategory = cleanupError?.message === "validation_artifact_path_unsafe"
+                ? cleanupError.message
+                : "validation_artifact_cleanup_failed";
+              await binding.writePhaseState(sanitizePhaseState({
+                phase: "negative_evidence_failed_terminal",
+                attempt_boundary: state.attempt_boundary,
+                scheduled_run_baseline: state.scheduled_run_baseline,
+                negative_evidence_failure: terminalCategory,
+                cleanup: "manual_intervention_required",
+              }));
+            }
+            if (terminalCategory === "manual_evidence_invalid" || terminalCategory === "manual_evidence_rejected") {
+              await binding.writePhaseState(sanitizePhaseState({
+                phase: "negative_evidence_failed_terminal",
+                attempt_boundary: state.attempt_boundary,
+                scheduled_run_baseline: state.scheduled_run_baseline,
+                negative_evidence_failure: terminalCategory,
+                cleanup: "complete",
+              }));
+            }
+            await binding.releaseResumeClaim();
+            claimed = false;
+          } catch (terminalError) {
+            if (terminalError?.message === "scheduler_resume_claim_release_failed") throw terminalError;
+            throw new Error("negative_evidence_terminalization_failed");
+          }
+          throw new Error(terminalCategory);
+        }
         try { await binding.releaseResumeClaim(); }
         catch (releaseError) {
           if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
