@@ -89,6 +89,11 @@ evidence is retained, write-capable artifacts are removed, and a new authorizati
 baseline is required. An old SQL Editor tab cannot be closed by the CLI, so users must never run
 an old tab; the in-database guards remain the final protection. Production is unsupported.
 
+Rejected final post-enqueue evidence is terminal as well: the final-resume owner persists the
+non-resumable state, removes all attempt artifacts, and releases its claim only after cleanup.
+There is no automatic retry or stale-claim bypass, and a later final resume cannot replay the
+rejected evidence.
+
 Terminalization first atomically invalidates the resumable state and leaves a minimal tombstone;
 cleanup and detailed terminal-state persistence happen only afterward. Thus persistence or cleanup
 failures remain non-resumable and use the sanitized `validation_artifact_cleanup_failed` category

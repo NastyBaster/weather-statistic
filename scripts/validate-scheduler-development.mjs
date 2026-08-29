@@ -200,12 +200,18 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
   if (parsed.resume) {
     let claimed = false;
     let completed = false;
+    let state;
     try {
       if (typeof binding.acquireResumeClaim === "function") {
         await binding.acquireResumeClaim("scheduler_resume_claim_active");
         claimed = true;
       }
-      const state = await binding.readPhaseState();
+      state = await binding.readPhaseState();
+      if (state.phase === "negative_evidence_failed_terminal" || state.phase === "negative_evidence_terminalizing") {
+        await binding.releaseResumeClaim();
+        claimed = false;
+        throw new Error("manual_evidence_rejected");
+      }
       if (state.phase !== "manual_enqueue_required" || !state.attempt_boundary || !Number.isInteger(state.scheduled_run_baseline)) {
         throw new Error("existing_negative_baseline_not_provable");
       }
@@ -255,6 +261,39 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
       return resumed;
     } catch (error) {
       if (claimed && !completed) {
+        const terminalRejections = new Set([
+          "manual_evidence_invalid",
+          "manual_evidence_rejected",
+          "existing_negative_baseline_not_provable",
+        ]);
+        if (terminalRejections.has(error?.message) && state) {
+          let terminalCategory = error.message === "existing_negative_baseline_not_provable"
+            ? error.message
+            : "manual_evidence_rejected";
+          try {
+            await binding.writePhaseState(sanitizePhaseState({
+              phase: "negative_evidence_failed_terminal",
+              attempt_boundary: state.attempt_boundary,
+              scheduled_run_baseline: state.scheduled_run_baseline,
+              negative_evidence_failure: terminalCategory,
+              cleanup: "terminal",
+            }));
+            try {
+              if (typeof binding.clearAttemptArtifacts === "function") await binding.clearAttemptArtifacts();
+              else await binding.cleanupArtifacts();
+            } catch (cleanupError) {
+              terminalCategory = cleanupError?.message === "validation_artifact_path_unsafe"
+                ? cleanupError.message
+                : "validation_artifact_cleanup_failed";
+            }
+            await binding.releaseResumeClaim();
+            claimed = false;
+          } catch (terminalError) {
+            if (terminalError?.message === "scheduler_resume_claim_release_failed") throw terminalError;
+            throw new Error("negative_evidence_terminalization_failed");
+          }
+          throw new Error(terminalCategory);
+        }
         try { await binding.releaseResumeClaim(); }
         catch (releaseError) {
           if (releaseError?.message === "scheduler_resume_claim_release_failed") throw releaseError;
