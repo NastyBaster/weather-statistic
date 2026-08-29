@@ -3,7 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath } from "./core.mjs";
+import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs } from "./core.mjs";
 import { acquireOwnership, ownerPresent } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
@@ -12,9 +12,9 @@ const root = process.cwd();
 const command = process.argv[2];
 const config = parseConfig(process.argv.slice(3));
 
-function run(program, args, cwd = root, input = "") {
+function run(program, args, cwd = root, input = "", env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(program, args, { cwd, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(program, args, { cwd, shell: false, env, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -55,7 +55,7 @@ const failureCategories = new Set(["doctor_failed", "no_eligible_issue", "invali
 async function block(number, category = "bridge_execution_failed") { const safeCategory = failureCategories.has(category) ? category : "bridge_execution_failed"; await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:blocked"]); await gh(["issue", "comment", String(number), "--body", `Bridge blocked: category=${safeCategory}`]); }
 async function handoff(number, runId, branch, pr) { await gh(["issue", "edit", String(number), "--remove-label", "agent:running", "--add-label", "agent:review"]); await gh(["issue", "comment", String(number), "--body", "Bridge handoff: run " + runId + "; branch " + branch + "; PR #" + pr + "; sanitized audit stored locally."]); }
 async function writeAudit(runId, value) { const dir = path.join(runtimeRoot(), "runs"); await mkdir(dir, { recursive: true }); const safe = { runId, phase: value.phase || "unknown", issue: Number.isSafeInteger(value.issue) ? value.issue : null, branch: value.branch || null, childOutcome: value.childOutcome || null, changedPaths: Array.isArray(value.changedPaths) ? value.changedPaths : [], checks: Array.isArray(value.checks) ? value.checks : [], pr: Number.isSafeInteger(value.pr) ? value.pr : null, outcome: value.outcome || "blocked" }; await writeFile(path.join(dir, `${runId}.json`), JSON.stringify(safe), { flag: "wx", mode: 0o600 }); }
-async function runChild(prompt, cwd) { const invocation = await codexInvocation(); return run(invocation.command, [...invocation.args, "exec", "--ephemeral", prompt], cwd); }
+async function runChild(prompt, cwd) { const invocation = await codexInvocation(); return run(invocation.command, [...invocation.args, ...codexSandboxArgs(cwd), prompt], cwd, "", childEnvironment()); }
 async function once() {
   const runId = "run-" + new Date().toISOString().replace(/[-:.TZ]/g, "") + "-" + randomBytes(4).toString("hex");
   if (config.dryRun) { console.log(JSON.stringify({ command: "once", runId, ...dryRunPlan(null) })); return; }

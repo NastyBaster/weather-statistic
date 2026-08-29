@@ -22,8 +22,7 @@ jobs:
             const removeReady = async () => { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name: 'agent:ready' }); } catch (e) { if (e.status !== 404) throw e; } };
             const removeValidate = async () => { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name: 'agent:validate' }); } catch (e) { if (e.status !== 404) throw e; } };
             const labels = (await github.rest.issues.listLabelsOnIssue({ ...context.repo, issue_number: issue.number })).data.map((x) => x.name);
-            if (context.payload.action === 'edited') { await removeReady(); if (labels.includes('agent:validate')) await removeValidate(); }
-            if (context.payload.action === 'edited' && !labels.includes('agent:validate')) return;
+            if (context.payload.action === 'edited') { await removeReady(); if (labels.includes('agent:validate')) await removeValidate(); return; }
             if (context.payload.label?.name === 'agent:ready' && context.payload.sender?.type !== 'Bot') { await removeReady(); core.setFailed('agent:ready is workflow-owned'); return; }
             const missing = required.filter((h) => !complete(h));
             if (!missing.includes('Allowed paths') && !/`[^`]+`/.test(body.match(/(?:^|\n)### Allowed paths[^\n]*\n([\s\S]*?)(?=\n### |$)/i)?.[1] || '')) missing.push('Allowed paths must use backtick syntax');
