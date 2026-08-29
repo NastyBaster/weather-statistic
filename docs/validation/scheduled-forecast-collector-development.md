@@ -113,6 +113,10 @@ never projects identifiers, headers, credentials, or raw payloads. A separate
 `--clear-terminal-delivery-diagnosis` mode removes only that diagnosis artifact while retaining
 the durable terminal state; ambiguous correlation and unexpected entries fail closed. The SQL is
 intended for a manual read-only Dashboard boundary and is never executed by the harness.
+Correlation uses retained response metadata after queue dequeue, bounded by the durable attempt
+boundary; zero candidates are uncorrelated and multiple candidates are ambiguous. Response JSON
+is validity-guarded before object extraction so malformed, scalar, and array content yields no raw
+diagnostic detail.
 
 On resume, the negative-evidence state is exclusively consumed before submitted evidence is parsed.
 If that consume operation fails, no evidence is accepted or persisted and no artifact is generated;

@@ -17,6 +17,9 @@ try {
   const sql = await readFile(join(root, "scheduler-terminal-delivery-diagnosis.sql"), "utf8");
   assert.match(sql, /set transaction read only/i);
   assert.equal((sql.match(/net\.http_post/gi) ?? []).length, 0);
+  assert.equal(sql.includes("net.http_request_queue"), false);
+  assert.match(sql, /pg_input_is_valid\(content, 'jsonb'\)/);
+  assert.match(sql, /case when correlation_candidate_count = 1/);
   assert.match(sql, /sanitized_error/);
   assert.match(sql, /sanitized_reason/);
   await assert.rejects(binding.writeTerminalDeliveryDiagnosisArtifact("2026-08-29T00:00:00Z"), /already_prepared/);

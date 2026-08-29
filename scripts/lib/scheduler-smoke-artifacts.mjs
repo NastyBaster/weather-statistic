@@ -278,12 +278,13 @@ export function buildTerminalDeliveryDiagnosisSql(attemptBoundary) {
   return `begin;
 set transaction read only;
 with candidates as (
-  select q.id as request_key, r.status_code, r.content
-  from net.http_request_queue q
-  join net._http_response r on r.id = q.id
-  where q.created >= '${boundary}'::timestamptz
+  select r.id as response_key, r.status_code, r.content
+  from net._http_response r
+  where r.created >= '${boundary}'::timestamptz
 ), parsed as (
-  select *, case when jsonb_typeof(content::jsonb) = 'object' then content::jsonb else null end as response_object
+  select *, case when pg_input_is_valid(content, 'jsonb')
+    then case when jsonb_typeof(content::jsonb) = 'object' then content::jsonb else null end
+    else null end as response_object
   from candidates
 ), aggregate as (
   select count(*)::integer as correlation_candidate_count,
@@ -299,8 +300,8 @@ select 'scheduler_delivery_diagnosis'::text as result_tag,
   correlation_candidate_count, correlation_candidate_count <> 1 as correlation_ambiguous,
   response_count, case when correlation_candidate_count = 1 then http_status_code else null end as http_status_code,
   response_json_valid,
-  case when correlation_candidate_count = 1 and error_value in ('invalid_request','unauthorized','method_not_allowed','configuration_error','overlap','internal_error') then error_value else 'other' end as sanitized_error,
-  case when correlation_candidate_count = 1 and reason_value in ('unsupported_content_type','forbidden_request_header','body_too_large','invalid_json','body_must_be_object','body_must_be_empty') then reason_value else 'other' end as sanitized_reason,
+  case when correlation_candidate_count = 1 and error_value in ('invalid_request','unauthorized','method_not_allowed','configuration_error','overlap','internal_error') then error_value when correlation_candidate_count = 1 then 'other' else null end as sanitized_error,
+  case when correlation_candidate_count = 1 and reason_value in ('unsupported_content_type','forbidden_request_header','body_too_large','invalid_json','body_must_be_object','body_must_be_empty') then reason_value when correlation_candidate_count = 1 then 'other' else null end as sanitized_reason,
   (http_status_code between 200 and 299) as status_is_2xx,
   (http_status_code between 400 and 499) as status_is_4xx,
   (http_status_code between 500 and 599) as status_is_5xx,
