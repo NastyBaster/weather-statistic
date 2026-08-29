@@ -287,7 +287,7 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
               attempt_boundary: state.attempt_boundary,
               scheduled_run_baseline: state.scheduled_run_baseline,
               negative_evidence_failure: terminalCategory,
-              cleanup: "terminal",
+              cleanup: "manual_intervention_required",
             }));
             try {
               if (typeof binding.clearAttemptArtifacts === "function") await binding.clearAttemptArtifacts();
@@ -302,6 +302,15 @@ export async function runHybridDevelopment(args, binding = createSchedulerDevelo
                 scheduled_run_baseline: state.scheduled_run_baseline,
                 negative_evidence_failure: terminalCategory,
                 cleanup: "manual_intervention_required",
+              }));
+            }
+            if (terminalCategory === "manual_evidence_invalid" || terminalCategory === "manual_evidence_rejected") {
+              await binding.writePhaseState(sanitizePhaseState({
+                phase: "negative_evidence_failed_terminal",
+                attempt_boundary: state.attempt_boundary,
+                scheduled_run_baseline: state.scheduled_run_baseline,
+                negative_evidence_failure: terminalCategory,
+                cleanup: "complete",
               }));
             }
             await binding.releaseResumeClaim();

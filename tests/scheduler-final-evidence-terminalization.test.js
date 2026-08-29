@@ -45,7 +45,7 @@ assert.equal(rejected.calls.clears, 1);
 assert.equal(rejected.calls.releases, 1);
 assert.equal(rejected.calls.writes.at(-1).phase, "negative_evidence_failed_terminal");
 assert.deepEqual(rejected.calls.order, [
-  "acquire", "read", "write:negative_evidence_failed_terminal", "clear", "release",
+  "acquire", "read", "write:negative_evidence_failed_terminal", "clear", "write:negative_evidence_failed_terminal", "release",
 ]);
 
 const malformed = binding();
@@ -62,7 +62,7 @@ const invalidation = binding({
 });
 await assert.rejects(runHybridDevelopment(args, invalidation), /manual_evidence_rejected/);
 assert.deepEqual(invalidation.calls.order, [
-  "acquire", "read", "invalidate", "write:negative_evidence_failed_terminal", "clear", "release",
+  "acquire", "read", "invalidate", "write:negative_evidence_failed_terminal", "clear", "write:negative_evidence_failed_terminal", "release",
 ]);
 
 const invalidationFailure = binding({
