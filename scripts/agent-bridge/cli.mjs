@@ -3,7 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs } from "./core.mjs";
+import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, npmCheckInvocation } from "./core.mjs";
 import { acquireOwnership, ownerPresent } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
@@ -85,8 +85,7 @@ async function once() {
     if (!checks.valid) throw new Error("unsafe_required_checks");
     for (const check of checks.commands) {
       if (check === "git diff --check") await git(["diff", "--check"], worktree);
-      else if (check === "npm run test:bridge") await run("npm.cmd", ["run", "test:bridge"], worktree);
-      else if (check === "npm run check") await run("npm.cmd", ["run", "check"], worktree);
+      else if (check === "npm run test:bridge" || check === "npm run check") { const invocation = npmCheckInvocation(process.platform, check); await run(invocation.program, invocation.args, worktree); }
     }
     await git(["add", "--", ...changed], worktree);
     await git(["diff", "--cached", "--check"], worktree);

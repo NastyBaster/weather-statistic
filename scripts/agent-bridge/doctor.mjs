@@ -7,12 +7,13 @@ const expectedProtectedChecks = ["check", "deploy", "validate"];
 export const committedWorkflows = [".github/workflows/agent-issue-contract.yml", ".github/workflows/agent-pr-contract.yml"];
 const command = async (args, cwd) => { try { const result = await runChild(args[0], args.slice(1), { cwd }); return { ok: result.code === 0, output: result.output }; } catch { return { ok: false, output: "" }; } };
 const canonicalOrigin = (value) => { try { const raw = String(value || "").trim(); const normalized = raw.startsWith("git@github.com:") ? `https://github.com/${raw.slice("git@github.com:".length)}` : raw; const url = new URL(normalized); const repositoryPath = url.pathname.replace(/\.git$/i, "").toLowerCase(); return url.protocol === "https:" && url.hostname.toLowerCase() === "github.com" && repositoryPath === "/nastybaster/weather-statistic"; } catch { return false; } };
+export const parseRemoteHead = (output) => String(output || "").trim().split(/\s+/)[0] || null;
 export function createRealDoctorAdapter(root = process.cwd()) { return {
   repository: async () => (await command(["git", "config", "--get", "remote.origin.url"], root)).output,
   branch: async () => (await command(["git", "branch", "--show-current"], root)).output.trim(),
   clean: async () => (await command(["git", "status", "--porcelain", "--untracked-files=all"], root)).output.trim() === "",
   head: async () => (await command(["git", "rev-parse", "HEAD"], root)).output.trim(),
-  originHead: async () => { const r = await command(["git", "ls-remote", "origin", "refs/heads/main"], root); return r.ok ? r.output.trim().split(/\\s+/)[0] || null : null; },
+  originHead: async () => { const r = await command(["git", "ls-remote", "origin", "refs/heads/main"], root); return r.ok ? parseRemoteHead(r.output) : null; },
   git: async () => (await command(["git", "--version"], root)).ok,
   node: () => Number.parseInt(process.versions.node.split(".")[0], 10) >= 20,
   codex: async () => (await command([process.platform === "win32" ? "where.exe" : "which", "codex"], root)).ok,
