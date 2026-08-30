@@ -20,6 +20,7 @@ const ALLOWED_APPLICATION_HEADERS = new Set([
   "accept-language",
   "apikey",
   "authorization",
+  "connection",
   "content-length",
   "content-type",
   "host",
