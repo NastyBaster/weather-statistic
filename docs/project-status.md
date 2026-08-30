@@ -51,6 +51,9 @@ remain pending. The development scheduler is not enabled, production is unchange
 5.2.1 remains in progress. Production rollout still requires a separately confirmed target and
 explicit authorization.
 
+A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
+does not execute scheduler or Supabase operations, and does not include batch/watch automation.
+
 ## Deferred Version 2 direction
 
 Version 2 may evaluate a shared precollected forecast archive independent of personal location

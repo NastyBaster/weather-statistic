@@ -1,0 +1,2 @@
+import test from "node:test"; import assert from "node:assert/strict"; import { cleanupDecision } from "../../scripts/agent-bridge/cleanup.mjs";
+test("cleanup requires verified merge and clean detached worktree", () => { assert.equal(cleanupDecision({ merged: true, clean: true, branchAttached: false, remoteExists: true }).cleanup, "complete"); assert.equal(cleanupDecision({ merged: false, clean: true, branchAttached: false, remoteExists: false }).cleanup, "blocked"); });

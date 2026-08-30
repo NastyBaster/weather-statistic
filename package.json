@@ -1,6 +1,7 @@
 {
   "name": "forecast-reality-check",
   "version": "0.1.0",
+  "engines": { "node": ">=20" },
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +21,10 @@
     "test:scheduler-entrypoint": "node tests/scheduler-entrypoint.test.js",
     "test:scheduler-argument-forwarding": "node tests/scheduler-argument-forwarding.test.js",
     "validate:scheduler:development": "node scripts/validate-scheduler-development.mjs",
-    "check": "node scripts/check-js.mjs && npm test && npm run build"
+    "check": "node scripts/check-js.mjs && npm run test:bridge && npm test && npm run build",
+    "bridge:doctor": "node scripts/agent-bridge/cli.mjs doctor",
+    "bridge:once": "node scripts/agent-bridge/cli.mjs once",
+    "test:bridge": "node --test tests/agent-bridge/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

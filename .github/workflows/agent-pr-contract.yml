@@ -1,0 +1,25 @@
+name: Agent PR contract
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  validate:
+    if: startsWith(github.head_ref, 'agent/') || github.head_ref == 'feat/single-task-agent-bridge'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const required = ['Issue','Motivation','Scope','Parent/child security boundary','Runtime deny policy','Tests','Manual post-merge configuration','Explicit non-goals'];
+            const section = (heading) => body.match(new RegExp(`(?:^|\\n)## ${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n## |$)`, 'i'))?.[1] || '';
+            const substantive = (value) => String(value).replace(/<!--[\\s\\S]*?-->/g, '').trim();
+            const missing = required.filter((h) => !substantive(section(h)) || /<!--|_No response_|<!-- exact command -->/i.test(section(h)));
+            const tests = section('Tests');
+            const requiredTests = ['npm run test:bridge', 'npm run check', 'git diff --check'];
+            if (!missing.includes('Tests') && (!requiredTests.every((command) => tests.includes(`- [x] \`${command}\``)) || /- \[ \]/i.test(tests))) missing.push('required checked test attestations');
+            if (missing.length) core.setFailed(`Incomplete PR report: ${missing.join(', ')}`);
+            if (!/Closes #\d+/i.test(body)) core.setFailed('PR must link its issue');

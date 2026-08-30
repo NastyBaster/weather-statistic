@@ -1,0 +1,5 @@
+import { mkdir, open, readFile, rm } from "node:fs/promises";
+import path from "node:path";
+const ownerPath = (root) => path.join(root, "owner.json");
+export async function acquireOwnership(root, { token = crypto.randomUUID(), mode = "once" } = {}) { await mkdir(root, { recursive: true }); let handle; try { handle = await open(ownerPath(root), "wx", 0o600); await handle.writeFile(JSON.stringify({ mode, token })); await handle.close(); } catch (error) { await handle?.close().catch(() => {}); if (error.code === "EEXIST") throw new Error("bridge_owner_active"); throw error; } let released = false; return { mode, ownerToken: token, async release() { if (released) return; const state = JSON.parse(await readFile(ownerPath(root), "utf8")); if (state.token !== token) throw new Error("bridge_owner_token_mismatch"); await rm(ownerPath(root)); released = true; } }; }
+export async function ownerPresent(root) { try { await readFile(ownerPath(root)); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; } }
