@@ -5,8 +5,10 @@ import { issueBodyDigest, validationEvidenceMatches } from "../../scripts/agent-
 
 test("PR workflow is scoped to agent branches and bootstrap exception", async () => {
   const source = await readFile(".github/workflows/agent-pr-contract.yml", "utf8");
-  assert.equal(source.includes("startsWith(github.head_ref, 'agent/')"), true);
+  assert.equal(source.includes("context.payload.pull_request.head.ref.startsWith('agent/')"), true);
   assert.equal(source.includes("feat/single-task-agent-bridge"), true);
+  assert.match(source, /if \(!scopedBridgePr\) \{\s*core\.info\('Bridge PR contract skipped for non-Agent branch\.'\);\s*return;\s*\}/s);
+  assert.doesNotMatch(source, /jobs:\s+validate:\s+if:/s);
 });
 
 test("issue readiness requires current bot-authored digest marker", () => {
