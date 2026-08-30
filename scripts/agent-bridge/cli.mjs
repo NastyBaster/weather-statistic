@@ -3,7 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, npmCheckInvocation } from "./core.mjs";
+import { parseConfig, dryRunPlan, eligible, issueAllowedPaths, branchFor, validateChangedPaths, parsePorcelainZ, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, npmCheckInvocation } from "./core.mjs";
 import { acquireOwnership, ownerPresent } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
@@ -77,8 +77,8 @@ async function once() {
     const prompt = promptFor(issue, { branch, worktree, allowedPaths, contract });
     const child = await runChild(prompt, worktree);
     if (!child.stdout.trim()) throw new Error("child_returned_no_summary");
-    const status = await git(["status", "--short", "--untracked-files=all"], worktree);
-    const changed = status.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3).trim()).filter(Boolean);
+    const status = await git(["status", "--porcelain", "-z", "--untracked-files=all"], worktree);
+    const changed = parsePorcelainZ(status);
     const pathCheck = validateChangedPaths(changed, allowedPaths);
     if (!pathCheck.valid || !changed.length) throw new Error("unsafe_changed_paths");
     const checks = validateRequiredChecks(contract.requiredChecks);
