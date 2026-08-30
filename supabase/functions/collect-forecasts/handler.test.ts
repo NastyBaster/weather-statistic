@@ -42,6 +42,21 @@ function request(token: string, body = "{}", headers: HeadersInit = {}) {
   });
 }
 
+function nodeFetchHeaders(token: string): HeadersInit {
+  return {
+    accept: "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "*",
+    authorization: `Bearer ${token}`,
+    connection: "keep-alive",
+    "content-length": "2",
+    "content-type": "application/json",
+    host: "example.test",
+    "sec-fetch-mode": "cors",
+    "user-agent": "node",
+  };
+}
+
 function dependencies(outcome: Outcome | Error) {
   const authClient = {
     auth: {
@@ -183,6 +198,36 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     assertEquals(JSON.stringify(payload).includes("admin-jwt"), false);
   }
 });
+
+Deno.test(
+  "handler accepts inert standard Node fetch transport headers for manual auth",
+  async () => {
+    let collected = 0;
+    const response = await handler(
+      new Request("https://example.test/collect", {
+        method: "POST",
+        body: "{}",
+        headers: nodeFetchHeaders("admin-jwt"),
+      }),
+      baseEnvironment,
+      {
+        ...dependencies(success),
+        collect: ((
+          _db: unknown,
+          _now: unknown,
+          _provider: unknown,
+          trigger: "manual" | "scheduled",
+        ) => {
+          collected += 1;
+          assertEquals(trigger, "manual");
+          return Promise.resolve(success);
+        }) as never,
+      },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(collected, 1);
+  },
+);
 
 Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
   const exact = `{${" ".repeat(1022)}}`;

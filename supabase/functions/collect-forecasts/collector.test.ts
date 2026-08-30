@@ -146,7 +146,20 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
   }
   assertEquals(
     hasDisallowedApplicationHeader(
-      new Headers({ "x-forwarded-for": "127.0.0.1", apikey: "public" }),
+      new Headers({
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate",
+        "accept-language": "*",
+        "authorization": "Bearer test",
+        "connection": "keep-alive",
+        "content-length": "2",
+        "content-type": "application/json",
+        "host": "example.test",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-for": "127.0.0.1",
+        "apikey": "public",
+      }),
     ),
     false,
   );
