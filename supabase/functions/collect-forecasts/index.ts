@@ -14,21 +14,36 @@ const json = (body: unknown, status = 200) =>
 export const collectionHttpStatus = (status: string) =>
   status === "failed" ? 500 : 200;
 
-const FORBIDDEN_REQUEST_HEADERS = new Set([
-  "x-trigger-type",
-  "x-caller-time",
-  "x-scheduler-slot",
-  "x-identity",
-  "trigger",
-  "scheduler-slot",
-  "x-forecast-trigger",
-  "x-scheduler-trigger",
-  "x-forecast-identity",
+const ALLOWED_APPLICATION_HEADERS = new Set([
+  "accept",
+  "accept-encoding",
+  "accept-language",
+  "apikey",
+  "authorization",
+  "connection",
+  "content-length",
+  "content-type",
+  "host",
+  "origin",
+  "referer",
+  "traceparent",
+  "tracestate",
+  "user-agent",
+  "x-client-info",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-port",
+  "x-forwarded-proto",
+  "x-real-ip",
 ]);
 
 export function hasDisallowedApplicationHeader(headers: Headers): boolean {
   for (const name of headers.keys()) {
-    if (FORBIDDEN_REQUEST_HEADERS.has(name.toLowerCase())) return true;
+    if (
+      !ALLOWED_APPLICATION_HEADERS.has(name) &&
+      !name.startsWith("cf-") &&
+      !name.startsWith("sec-fetch-")
+    ) return true;
   }
   return false;
 }

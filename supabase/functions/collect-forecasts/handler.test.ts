@@ -161,6 +161,9 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     "x-forecast-trigger",
     "x-scheduler-trigger",
     "x-forecast-identity",
+    "x-run-trigger",
+    "x-correlation-id",
+    "x-runtime-transport",
   ] as const;
   const cases = [
     [
@@ -226,32 +229,6 @@ Deno.test(
         body: "{}",
         headers: nodeFetchHeaders("admin-jwt"),
       }),
-      baseEnvironment,
-      {
-        ...dependencies(success),
-        collect: ((
-          _db: unknown,
-          _now: unknown,
-          _provider: unknown,
-          trigger: "manual" | "scheduled",
-        ) => {
-          collected += 1;
-          assertEquals(trigger, "manual");
-          return Promise.resolve(success);
-        }) as never,
-      },
-    );
-    assertEquals(response.status, 200);
-    assertEquals(collected, 1);
-  },
-);
-
-Deno.test(
-  "handler ignores unknown inert transport headers and keeps manual trigger derivation in authorize",
-  async () => {
-    let collected = 0;
-    const response = await handler(
-      request("admin-jwt", "{}", { "x-runtime-transport": "node-fetch" }),
       baseEnvironment,
       {
         ...dependencies(success),

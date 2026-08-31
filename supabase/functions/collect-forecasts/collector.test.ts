@@ -122,7 +122,7 @@ Deno.test("scheduler credential has exact base64url 32-byte shape", async () => 
   );
 });
 
-Deno.test("request surface rejects only caller-controlled spoofing headers", () => {
+Deno.test("request surface accepts only JSON and reviewed gateway headers", () => {
   for (
     const value of [
       "application/json",
@@ -159,8 +159,6 @@ Deno.test("request surface rejects only caller-controlled spoofing headers", () 
         "user-agent": "node",
         "x-forwarded-for": "127.0.0.1",
         "apikey": "public",
-        "x-runtime-transport": "node-fetch",
-        "x-forwarded-request-id": "opaque",
       }),
     ),
     false,
@@ -176,6 +174,9 @@ Deno.test("request surface rejects only caller-controlled spoofing headers", () 
       "x-forecast-trigger",
       "x-scheduler-trigger",
       "x-forecast-identity",
+      "x-run-trigger",
+      "x-correlation-id",
+      "x-runtime-transport",
     ]
   ) {
     assert(hasDisallowedApplicationHeader(new Headers({ [name]: "spoof" })));
