@@ -171,6 +171,12 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
       "x-identity",
       "trigger",
       "scheduler-slot",
+      "x-forecast-trigger",
+      "x-scheduler-trigger",
+      "x-forecast-identity",
+      "x-run-trigger",
+      "x-correlation-id",
+      "x-runtime-transport",
     ]
   ) {
     assert(hasDisallowedApplicationHeader(new Headers({ [name]: "spoof" })));
