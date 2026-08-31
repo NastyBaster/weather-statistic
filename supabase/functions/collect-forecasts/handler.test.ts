@@ -143,6 +143,25 @@ Deno.test("handler authentication and scheduler configuration status matrix", as
 });
 
 Deno.test("handler rejects spoofing and malformed request bodies", async () => {
+  let collected = 0;
+  const strictDependencies = {
+    ...dependencies(success),
+    collect: (() => {
+      collected += 1;
+      return Promise.resolve(success);
+    }) as never,
+  };
+  const spoofingHeaders = [
+    "x-caller-time",
+    "x-scheduler-slot",
+    "trigger",
+    "x-trigger-type",
+    "x-identity",
+    "scheduler-slot",
+    "x-forecast-trigger",
+    "x-scheduler-trigger",
+    "x-forecast-identity",
+  ] as const;
   const cases = [
     [
       request("admin-jwt", "", { "content-type": "text/plain" }),
@@ -163,27 +182,12 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
       "body_too_large",
       `{${" ".repeat(1025)}}`,
     ],
-    [
-      request("admin-jwt", "{}", { "x-caller-time": "spoof" }),
-      "forbidden_request_header",
-      "{}",
-    ],
-    [
-      request("admin-jwt", "{}", { "x-scheduler-slot": "spoof" }),
-      "forbidden_request_header",
-      "{}",
-    ],
-    [
-      request("admin-jwt", "{}", { trigger: "scheduled" }),
-      "forbidden_request_header",
-      "{}",
-    ],
   ] as const;
   for (const [candidate, reason, submitted] of cases) {
     const response = await handler(
       candidate,
       baseEnvironment,
-      dependencies(success),
+      strictDependencies,
     );
     assertEquals(response.status, 400);
     const payload = await response.json();
@@ -197,6 +201,19 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     assertEquals(JSON.stringify(payload).includes("spoof"), false);
     assertEquals(JSON.stringify(payload).includes("admin-jwt"), false);
   }
+  for (const headerName of spoofingHeaders) {
+    const response = await handler(
+      request("admin-jwt", "{}", { [headerName]: "spoof" }),
+      baseEnvironment,
+      strictDependencies,
+    );
+    assertEquals(response.status, 400);
+    assertEquals(await response.json(), {
+      error: "invalid_request",
+      reason: "forbidden_request_header",
+    });
+  }
+  assertEquals(collected, 0);
 });
 
 Deno.test(
@@ -209,6 +226,32 @@ Deno.test(
         body: "{}",
         headers: nodeFetchHeaders("admin-jwt"),
       }),
+      baseEnvironment,
+      {
+        ...dependencies(success),
+        collect: ((
+          _db: unknown,
+          _now: unknown,
+          _provider: unknown,
+          trigger: "manual" | "scheduled",
+        ) => {
+          collected += 1;
+          assertEquals(trigger, "manual");
+          return Promise.resolve(success);
+        }) as never,
+      },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(collected, 1);
+  },
+);
+
+Deno.test(
+  "handler ignores unknown inert transport headers and keeps manual trigger derivation in authorize",
+  async () => {
+    let collected = 0;
+    const response = await handler(
+      request("admin-jwt", "{}", { "x-runtime-transport": "node-fetch" }),
       baseEnvironment,
       {
         ...dependencies(success),
