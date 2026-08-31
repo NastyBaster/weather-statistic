@@ -16,6 +16,13 @@ export const collectionHttpStatus = (status: string) =>
 const REJECTED_HEADER_LOG_EVENT = "forecast_request_rejected";
 const REJECTED_HEADER_LOG_REASON = "forbidden_request_header";
 const MAX_REJECTED_HEADER_COUNT = 8;
+export const MAX_SAFE_REJECTED_HEADER_LABEL_LENGTH = 64;
+export const REDACTED_INVALID_HEADER_NAME = "redacted_invalid_header_name";
+export const REDACTED_OVERSIZED_HEADER_NAME = "redacted_oversized_header_name";
+export const REDACTED_SENSITIVE_HEADER_NAME = "redacted_sensitive_header_name";
+const SAFE_REJECTED_HEADER_LABEL = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MIN_BASE64URL_LIKE_SEGMENT_LENGTH = 20;
+const MIN_HEX_LIKE_SEGMENT_LENGTH = 16;
 
 const ALLOWED_APPLICATION_HEADERS = new Set([
   "accept",
@@ -45,6 +52,32 @@ export type RejectedHeaderSummary = {
   rejectedHeaderCount: number;
 };
 
+export function sanitizeRejectedHeaderNameForDiagnostic(name: string): string {
+  const normalized = name.toLowerCase();
+  if (normalized.length === 0) return REDACTED_INVALID_HEADER_NAME;
+  if (normalized.length > MAX_SAFE_REJECTED_HEADER_LABEL_LENGTH) {
+    return REDACTED_OVERSIZED_HEADER_NAME;
+  }
+  if (!SAFE_REJECTED_HEADER_LABEL.test(normalized)) {
+    return REDACTED_INVALID_HEADER_NAME;
+  }
+  for (const segment of normalized.split("-")) {
+    if (
+      segment.length >= MIN_HEX_LIKE_SEGMENT_LENGTH &&
+      /^[0-9a-f]+$/.test(segment)
+    ) {
+      return REDACTED_SENSITIVE_HEADER_NAME;
+    }
+    if (
+      segment.length >= MIN_BASE64URL_LIKE_SEGMENT_LENGTH &&
+      /^[a-z0-9_]+$/.test(segment)
+    ) {
+      return REDACTED_SENSITIVE_HEADER_NAME;
+    }
+  }
+  return normalized;
+}
+
 export function summarizeRejectedApplicationHeaders(
   headers: Headers,
 ): RejectedHeaderSummary | null {
@@ -57,7 +90,9 @@ export function summarizeRejectedApplicationHeaders(
       !normalized.startsWith("cf-") &&
       !normalized.startsWith("sec-fetch-")
     ) {
-      if (rejectedHeaderName === null) rejectedHeaderName = normalized;
+      if (rejectedHeaderName === null) {
+        rejectedHeaderName = sanitizeRejectedHeaderNameForDiagnostic(name);
+      }
       if (rejectedHeaderCount < MAX_REJECTED_HEADER_COUNT) {
         rejectedHeaderCount += 1;
       }
@@ -98,6 +133,13 @@ export function logRejectedHeaderDiagnostic(
     rejected_header_count: summary.rejectedHeaderCount,
   }));
 }
+
+export const MAX_REJECTED_HEADER_DIAGNOSTIC_LENGTH = JSON.stringify({
+  event: REJECTED_HEADER_LOG_EVENT,
+  reason: REJECTED_HEADER_LOG_REASON,
+  rejected_header_name: "x".repeat(MAX_SAFE_REJECTED_HEADER_LABEL_LENGTH),
+  rejected_header_count: MAX_REJECTED_HEADER_COUNT,
+}).length;
 
 export async function handler(
   request: Request,

@@ -15,6 +15,9 @@ import {
   collectionHttpStatus,
   hasDisallowedApplicationHeader,
   hasJsonContentType,
+  REDACTED_OVERSIZED_HEADER_NAME,
+  REDACTED_SENSITIVE_HEADER_NAME,
+  sanitizeRejectedHeaderNameForDiagnostic,
   summarizeRejectedApplicationHeaders,
 } from "./index.ts";
 import { abortableSleep } from "./retry.ts";
@@ -181,15 +184,30 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
     summarizeRejectedApplicationHeaders(
       new Headers(Object.fromEntries(
         Array.from({ length: 10 }, (_value, index) => [
-          `x-rejected-${index}`,
+          index === 0 ? `x-${"c".repeat(70)}` : `x-rejected-${index}`,
           "opaque",
         ]),
       )),
     ),
     {
-      rejectedHeaderName: "x-rejected-0",
+      rejectedHeaderName: REDACTED_OVERSIZED_HEADER_NAME,
       rejectedHeaderCount: 8,
     },
+  );
+  assertEquals(
+    summarizeRejectedApplicationHeaders(
+      new Headers({
+        [`x-${"a".repeat(43)}`]: "opaque",
+      }),
+    ),
+    {
+      rejectedHeaderName: REDACTED_SENSITIVE_HEADER_NAME,
+      rejectedHeaderCount: 1,
+    },
+  );
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic("x-not allowed"),
+    "redacted_invalid_header_name",
   );
   assertEquals(
     summarizeRejectedApplicationHeaders(

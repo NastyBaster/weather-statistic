@@ -1,5 +1,13 @@
 import { assertEquals } from "@std/assert";
-import { handler, logRejectedHeaderDiagnostic } from "./index.ts";
+import {
+  handler,
+  logRejectedHeaderDiagnostic,
+  MAX_REJECTED_HEADER_DIAGNOSTIC_LENGTH,
+  REDACTED_INVALID_HEADER_NAME,
+  REDACTED_OVERSIZED_HEADER_NAME,
+  REDACTED_SENSITIVE_HEADER_NAME,
+  sanitizeRejectedHeaderNameForDiagnostic,
+} from "./index.ts";
 import {
   classifyRequestShape,
   INVALID_REQUEST_REASONS,
@@ -299,10 +307,96 @@ Deno.test("rejected request emits one bounded diagnostic record with normalized 
   assertEquals(payload.reason, "forbidden_request_header");
   assertEquals(payload.rejected_header_name, "x-correlation-id");
   assertEquals(payload.rejected_header_count, 2);
+  assertEquals(
+    diagnostics[0].length <= MAX_REJECTED_HEADER_DIAGNOSTIC_LENGTH,
+    true,
+  );
   assertEquals(diagnostics[0].includes("retry"), false);
   assertEquals(diagnostics[0].includes("jwt-like-value.with.segments"), false);
   assertEquals(diagnostics[0].includes("admin-jwt"), false);
   assertEquals(diagnostics[0].includes("{}"), false);
+});
+
+Deno.test("diagnostic sanitizer normalizes short conventional header names", () => {
+  assertEquals(sanitizeRejectedHeaderNameForDiagnostic("Priority"), "priority");
+  assertEquals(sanitizeRejectedHeaderNameForDiagnostic("CDN-Loop"), "cdn-loop");
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic("X-Runtime-Transport"),
+    "x-runtime-transport",
+  );
+});
+
+Deno.test("diagnostic sanitizer fully redacts invalid, oversized, and token-like names", () => {
+  const syntheticOpaqueSegment = "a".repeat(43);
+  const longHexSegment = "deadbeef".repeat(3);
+  const oversizedName = `x-${"a".repeat(70)}`;
+
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic("Bad Header"),
+    REDACTED_INVALID_HEADER_NAME,
+  );
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic(oversizedName),
+    REDACTED_OVERSIZED_HEADER_NAME,
+  );
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic(`x-${syntheticOpaqueSegment}`),
+    REDACTED_SENSITIVE_HEADER_NAME,
+  );
+  assertEquals(
+    sanitizeRejectedHeaderNameForDiagnostic(`x-${longHexSegment}`),
+    REDACTED_SENSITIVE_HEADER_NAME,
+  );
+});
+
+Deno.test("rejected request fully redacts sensitive and oversized header names in one bounded record", async () => {
+  const diagnostics: string[] = [];
+  const syntheticOpaqueSegment = "a".repeat(43);
+  const oversizedSuffix = "b".repeat(70);
+  let collected = 0;
+  const response = await handler(
+    request("admin-jwt", '{"fixture":"jwt.segment.value"}', {
+      [`x-${syntheticOpaqueSegment}`]: "Bearer fixture-token",
+      [`x-${oversizedSuffix}`]: "oversized",
+      authorization: "Bearer admin-jwt",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: (() => {
+        collected += 1;
+        return Promise.resolve(success);
+      }) as never,
+      log: ((message: string) => diagnostics.push(message)) as never,
+    },
+  );
+
+  assertEquals(response.status, 400);
+  assertEquals(await response.json(), {
+    error: "invalid_request",
+    reason: "forbidden_request_header",
+  });
+  assertEquals(collected, 0);
+  assertEquals(diagnostics.length, 1);
+
+  const serialized = diagnostics[0];
+  const payload = JSON.parse(serialized);
+  assertEquals(payload.event, "forecast_request_rejected");
+  assertEquals(payload.reason, "forbidden_request_header");
+  assertEquals(
+    payload.rejected_header_name,
+    REDACTED_SENSITIVE_HEADER_NAME,
+  );
+  assertEquals(payload.rejected_header_count, 2);
+  assertEquals(
+    serialized.length <= MAX_REJECTED_HEADER_DIAGNOSTIC_LENGTH,
+    true,
+  );
+  assertEquals(serialized.includes(syntheticOpaqueSegment), false);
+  assertEquals(serialized.includes(oversizedSuffix), false);
+  assertEquals(serialized.includes("fixture-token"), false);
+  assertEquals(serialized.includes("jwt.segment.value"), false);
+  assertEquals(serialized.includes("admin-jwt"), false);
 });
 
 Deno.test("diagnostic helper caps the rejected header count", () => {
@@ -318,6 +412,10 @@ Deno.test("diagnostic helper caps the rejected header count", () => {
     rejected_header_name: "x-run-trigger",
     rejected_header_count: 8,
   });
+  assertEquals(
+    diagnostics[0].length <= MAX_REJECTED_HEADER_DIAGNOSTIC_LENGTH,
+    true,
+  );
 });
 
 Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
