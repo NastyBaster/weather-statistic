@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { handler } from "./index.ts";
+import { handler, logRejectedHeaderDiagnostic } from "./index.ts";
 import {
   classifyRequestShape,
   INVALID_REQUEST_REASONS,
@@ -80,6 +80,7 @@ function dependencies(outcome: Outcome | Error) {
         outcome instanceof Error
           ? Promise.reject(outcome)
           : Promise.resolve(outcome)) as never,
+    log: (() => {}) as never,
   };
 }
 
@@ -144,12 +145,14 @@ Deno.test("handler authentication and scheduler configuration status matrix", as
 
 Deno.test("handler rejects spoofing and malformed request bodies", async () => {
   let collected = 0;
+  const diagnostics: string[] = [];
   const strictDependencies = {
     ...dependencies(success),
     collect: (() => {
       collected += 1;
       return Promise.resolve(success);
     }) as never,
+    log: ((message: string) => diagnostics.push(message)) as never,
   };
   const spoofingHeaders = [
     "x-caller-time",
@@ -217,6 +220,20 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     });
   }
   assertEquals(collected, 0);
+  assertEquals(diagnostics.length, spoofingHeaders.length);
+  for (const entry of diagnostics) {
+    const payload = JSON.parse(entry);
+    assertEquals(payload.event, "forecast_request_rejected");
+    assertEquals(payload.reason, "forbidden_request_header");
+    assertEquals(typeof payload.rejected_header_name, "string");
+    assertEquals(typeof payload.rejected_header_count, "number");
+    assertEquals(entry.includes("spoof"), false);
+    assertEquals(entry.includes("admin-jwt"), false);
+    assertEquals(
+      /[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(entry),
+      false,
+    );
+  }
 });
 
 Deno.test(
@@ -242,12 +259,66 @@ Deno.test(
           assertEquals(trigger, "manual");
           return Promise.resolve(success);
         }) as never,
+        log: (() => {
+          throw new Error("unexpected rejected-header diagnostic");
+        }) as never,
       },
     );
     assertEquals(response.status, 200);
     assertEquals(collected, 1);
   },
 );
+
+Deno.test("rejected request emits one bounded diagnostic record with normalized name", async () => {
+  const diagnostics: string[] = [];
+  let collected = 0;
+  const response = await handler(
+    request("admin-jwt", "{}", {
+      "X-Run-Trigger": "retry",
+      "X-Correlation-Id": "jwt-like-value.with.segments",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: (() => {
+        collected += 1;
+        return Promise.resolve(success);
+      }) as never,
+      log: ((message: string) => diagnostics.push(message)) as never,
+    },
+  );
+  assertEquals(response.status, 400);
+  assertEquals(await response.json(), {
+    error: "invalid_request",
+    reason: "forbidden_request_header",
+  });
+  assertEquals(collected, 0);
+  assertEquals(diagnostics.length, 1);
+  const payload = JSON.parse(diagnostics[0]);
+  assertEquals(payload.event, "forecast_request_rejected");
+  assertEquals(payload.reason, "forbidden_request_header");
+  assertEquals(payload.rejected_header_name, "x-correlation-id");
+  assertEquals(payload.rejected_header_count, 2);
+  assertEquals(diagnostics[0].includes("retry"), false);
+  assertEquals(diagnostics[0].includes("jwt-like-value.with.segments"), false);
+  assertEquals(diagnostics[0].includes("admin-jwt"), false);
+  assertEquals(diagnostics[0].includes("{}"), false);
+});
+
+Deno.test("diagnostic helper caps the rejected header count", () => {
+  const diagnostics: string[] = [];
+  logRejectedHeaderDiagnostic(
+    (message) => diagnostics.push(message),
+    { rejectedHeaderName: "x-run-trigger", rejectedHeaderCount: 8 },
+  );
+  assertEquals(diagnostics.length, 1);
+  assertEquals(JSON.parse(diagnostics[0]), {
+    event: "forecast_request_rejected",
+    reason: "forbidden_request_header",
+    rejected_header_name: "x-run-trigger",
+    rejected_header_count: 8,
+  });
+});
 
 Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
   const exact = `{${" ".repeat(1022)}}`;
@@ -311,6 +382,9 @@ Deno.test("generated scheduler request passes the handler request-shape seam", a
       collect: (() => {
         collected += 1;
         return Promise.resolve(success);
+      }) as never,
+      log: (() => {
+        throw new Error("unexpected rejected-header diagnostic");
       }) as never,
     },
   );

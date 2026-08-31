@@ -13,6 +13,9 @@ const json = (body: unknown, status = 200) =>
   });
 export const collectionHttpStatus = (status: string) =>
   status === "failed" ? 500 : 200;
+const REJECTED_HEADER_LOG_EVENT = "forecast_request_rejected";
+const REJECTED_HEADER_LOG_REASON = "forbidden_request_header";
+const MAX_REJECTED_HEADER_COUNT = 8;
 
 const ALLOWED_APPLICATION_HEADERS = new Set([
   "accept",
@@ -37,15 +40,36 @@ const ALLOWED_APPLICATION_HEADERS = new Set([
   "x-real-ip",
 ]);
 
-export function hasDisallowedApplicationHeader(headers: Headers): boolean {
+export type RejectedHeaderSummary = {
+  rejectedHeaderName: string;
+  rejectedHeaderCount: number;
+};
+
+export function summarizeRejectedApplicationHeaders(
+  headers: Headers,
+): RejectedHeaderSummary | null {
+  let rejectedHeaderName: string | null = null;
+  let rejectedHeaderCount = 0;
   for (const name of headers.keys()) {
+    const normalized = name.toLowerCase();
     if (
-      !ALLOWED_APPLICATION_HEADERS.has(name) &&
-      !name.startsWith("cf-") &&
-      !name.startsWith("sec-fetch-")
-    ) return true;
+      !ALLOWED_APPLICATION_HEADERS.has(normalized) &&
+      !normalized.startsWith("cf-") &&
+      !normalized.startsWith("sec-fetch-")
+    ) {
+      if (rejectedHeaderName === null) rejectedHeaderName = normalized;
+      if (rejectedHeaderCount < MAX_REJECTED_HEADER_COUNT) {
+        rejectedHeaderCount += 1;
+      }
+    }
   }
-  return false;
+  return rejectedHeaderName === null
+    ? null
+    : { rejectedHeaderName, rejectedHeaderCount };
+}
+
+export function hasDisallowedApplicationHeader(headers: Headers): boolean {
+  return summarizeRejectedApplicationHeaders(headers) !== null;
 }
 
 export function hasJsonContentType(headers: Headers): boolean {
@@ -59,13 +83,30 @@ export function hasJsonContentType(headers: Headers): boolean {
 type HandlerDependencies = {
   createClient: typeof createClient;
   collect: typeof collect;
+  log: (message: string) => void;
 };
 type Environment = { get(name: string): string | undefined };
+
+export function logRejectedHeaderDiagnostic(
+  log: (message: string) => void,
+  summary: RejectedHeaderSummary,
+) {
+  log(JSON.stringify({
+    event: REJECTED_HEADER_LOG_EVENT,
+    reason: REJECTED_HEADER_LOG_REASON,
+    rejected_header_name: summary.rejectedHeaderName,
+    rejected_header_count: summary.rejectedHeaderCount,
+  }));
+}
 
 export async function handler(
   request: Request,
   env: Environment = Deno.env,
-  dependencies: HandlerDependencies = { createClient, collect },
+  dependencies: HandlerDependencies = {
+    createClient,
+    collect,
+    log: console.log,
+  },
 ) {
   if (request.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405);
@@ -97,8 +138,14 @@ export async function handler(
   if (decision === 401) return json({ error: "unauthorized" }, 401);
   if (decision === 403) return json({ error: "forbidden" }, 403);
   const contentTypeValid = hasJsonContentType(request.headers);
-  const forbiddenHeader = hasDisallowedApplicationHeader(request.headers);
+  const rejectedHeaderSummary = summarizeRejectedApplicationHeaders(
+    request.headers,
+  );
+  const forbiddenHeader = rejectedHeaderSummary !== null;
   if (!contentTypeValid || forbiddenHeader) {
+    if (rejectedHeaderSummary) {
+      logRejectedHeaderDiagnostic(dependencies.log, rejectedHeaderSummary);
+    }
     return json({
       error: "invalid_request",
       reason: contentTypeValid

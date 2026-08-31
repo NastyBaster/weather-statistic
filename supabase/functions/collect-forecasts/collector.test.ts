@@ -15,6 +15,7 @@ import {
   collectionHttpStatus,
   hasDisallowedApplicationHeader,
   hasJsonContentType,
+  summarizeRejectedApplicationHeaders,
 } from "./index.ts";
 import { abortableSleep } from "./retry.ts";
 
@@ -162,6 +163,45 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
       }),
     ),
     false,
+  );
+  assertEquals(
+    summarizeRejectedApplicationHeaders(
+      new Headers({
+        "X-Run-Trigger": "retry",
+        "X-Correlation-Id": "opaque",
+        "CF-Ray": "ok",
+      }),
+    ),
+    {
+      rejectedHeaderName: "x-correlation-id",
+      rejectedHeaderCount: 2,
+    },
+  );
+  assertEquals(
+    summarizeRejectedApplicationHeaders(
+      new Headers(Object.fromEntries(
+        Array.from({ length: 10 }, (_value, index) => [
+          `x-rejected-${index}`,
+          "opaque",
+        ]),
+      )),
+    ),
+    {
+      rejectedHeaderName: "x-rejected-0",
+      rejectedHeaderCount: 8,
+    },
+  );
+  assertEquals(
+    summarizeRejectedApplicationHeaders(
+      new Headers({
+        "accept": "*/*",
+        "authorization": "Bearer test",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "sec-fetch-mode": "cors",
+      }),
+    ),
+    null,
   );
   for (
     const name of [
