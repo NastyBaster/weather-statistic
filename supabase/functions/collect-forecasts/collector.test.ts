@@ -122,7 +122,7 @@ Deno.test("scheduler credential has exact base64url 32-byte shape", async () => 
   );
 });
 
-Deno.test("request surface accepts only JSON and reviewed gateway headers", () => {
+Deno.test("request surface accepts JSON, ignores inert transport headers, and blocks legacy spoofing names", () => {
   for (
     const value of [
       "application/json",
@@ -163,6 +163,17 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
     ),
     false,
   );
+  assertEquals(
+    hasDisallowedApplicationHeader(
+      new Headers({
+        "x-run-trigger": "opaque",
+        "x-correlation-id": "opaque",
+        "x-runtime-transport": "opaque",
+        "x-future-gateway-header": "opaque",
+      }),
+    ),
+    false,
+  );
   for (
     const name of [
       "x-trigger-type",
@@ -174,9 +185,6 @@ Deno.test("request surface accepts only JSON and reviewed gateway headers", () =
       "x-forecast-trigger",
       "x-scheduler-trigger",
       "x-forecast-identity",
-      "x-run-trigger",
-      "x-correlation-id",
-      "x-runtime-transport",
     ]
   ) {
     assert(hasDisallowedApplicationHeader(new Headers({ [name]: "spoof" })));
