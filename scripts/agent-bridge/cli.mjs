@@ -3,16 +3,15 @@ import path from "node:path";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { parseConfig, dryRunPlan, eligible, branchFor, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, validateCommitMessage, validateCheckSelection, validateStatusSnapshot, sameNormalizedPaths } from "./core.mjs";
+import { pathToFileURL } from "node:url";
+import { parseConfig, dryRunPlan, eligible, branchFor, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, validateCommitMessage, validateCheckSelection, validateTaskStatusSnapshot, sameNormalizedPaths } from "./core.mjs";
 import { acquireOwnership } from "./ownership.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
 export function runtimeRoot() { return path.join(process.env.LOCALAPPDATA || os.tmpdir(), "ForecastRealityCheck", "agent-bridge", "weather-statistic"); }
 const root = process.cwd();
-const command = process.argv[2];
-const config = parseConfig(process.argv.slice(3));
 
-function run(program, args, cwd = root, input = "", env) {
+export function run(program, args, cwd = root, input = "", env) {
   return new Promise((resolve, reject) => {
     const child = spawn(program, args, { cwd, shell: false, env, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
@@ -73,15 +72,20 @@ async function ensureNoInProgressGitOperation(cwd = root) {
     if (await gitPathExists(marker)) throw new Error("git_operation_in_progress");
   }
 }
-async function statusSnapshot(cwd) {
+export async function statusSnapshot(cwd, taskAllowedPaths, gitReader = git) {
+  if (!Array.isArray(taskAllowedPaths) || taskAllowedPaths.length === 0) throw new Error("missing_task_allowed_paths");
+  const output = await gitReader(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd);
+  return validateTaskStatusSnapshot(output, taskAllowedPaths);
+}
+async function repositoryStatusSnapshot(cwd) {
   const output = await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd);
-  return validateStatusSnapshot(output);
+  return { records: output ? output.split("\0").filter(Boolean) : [] };
 }
 async function ensureWorktreeClean(cwd) {
-  const snapshot = await statusSnapshot(cwd);
+  const snapshot = await repositoryStatusSnapshot(cwd);
   if (snapshot.records.length > 0) throw new Error("unexpected_dirty_worktree");
 }
-async function once() {
+export async function once(config = parseConfig(process.argv.slice(3))) {
   const runId = "run-" + new Date().toISOString().replace(/[-:.TZ]/g, "") + "-" + randomBytes(4).toString("hex");
   if (config.dryRun) { console.log(JSON.stringify({ command: "once", runId, ...dryRunPlan(null) })); return; }
   const commitMessage = validateCommitMessage(config.commitMessage);
@@ -117,14 +121,14 @@ async function once() {
     const prompt = promptFor(issue, { branch, worktree, allowedPaths: contract.allowedPaths, contract });
     const child = await runChild(prompt, worktree);
     if (!child.stdout.trim()) throw new Error("child_returned_no_summary");
-    const postChild = await statusSnapshot(worktree);
-    if (!postChild.valid) throw new Error("unsafe_changed_paths");
+    const postChild = await statusSnapshot(worktree, contract.allowedPaths);
+    if (!postChild.valid) throw new Error(postChild.category || "unsafe_changed_paths");
     const changed = postChild.changedPaths;
     for (const check of checks.registry) {
       await run(check.command, check.args, worktree);
     }
-    const postChecks = await statusSnapshot(worktree);
-    if (!postChecks.valid) throw new Error("unsafe_changed_paths");
+    const postChecks = await statusSnapshot(worktree, contract.allowedPaths);
+    if (!postChecks.valid) throw new Error(postChecks.category || "unsafe_changed_paths");
     if (!sameNormalizedPaths(changed, postChecks.changedPaths)) throw new Error("worktree_status_changed_after_checks");
     await git(["add", "--", ...changed], worktree);
     await git(["diff", "--cached", "--check"], worktree);
@@ -157,13 +161,21 @@ async function once() {
     await ownership.release();
   }
 }
-if (command === "doctor") {
-  const result = await runDoctor(createRealDoctorAdapter(), runtimeRoot());
-  console.log(JSON.stringify({ command: "doctor", pass: result.pass, failures: result.failures, checks: result.checks }));
-  process.exitCode = result.pass ? 0 : 1;
-} else if (command === "once") {
-  await once();
-} else {
-  console.error("Usage: bridge <doctor|once> [--dry-run]");
-  process.exitCode = 2;
+export async function main(argv = process.argv.slice(2)) {
+  const command = argv[0];
+  const config = parseConfig(argv.slice(1));
+  if (command === "doctor") {
+    const result = await runDoctor(createRealDoctorAdapter(), runtimeRoot());
+    console.log(JSON.stringify({ command: "doctor", pass: result.pass, failures: result.failures, checks: result.checks }));
+    process.exitCode = result.pass ? 0 : 1;
+  } else if (command === "once") {
+    await once(config);
+  } else {
+    console.error("Usage: bridge <doctor|once> [--dry-run]");
+    process.exitCode = 2;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

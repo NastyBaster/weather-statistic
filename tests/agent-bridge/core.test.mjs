@@ -26,7 +26,10 @@ import {
   validateCheckSelection,
   validateCommitMessage,
   validateRequiredChecks,
+  validateTaskAllowedPaths,
+  validateTaskStatusSnapshot,
   validateStatusSnapshot,
+  windowsCommandProcessor,
   worktreePath,
   childEnvironment,
   codexSandboxArgs,
@@ -91,8 +94,8 @@ test("child environment strips credentials and enforces sandbox", () => {
 
 test("npm checks use fixed executable arrays on both platforms", () => {
   const win = npmCheckInvocation("win32", "npm run check");
-  assert.equal(win.program, "npm.cmd");
-  assert.deepEqual(win.args, ["run", "check"]);
+  assert.match(win.program, /cmd(\.exe)?$/i);
+  assert.deepEqual(win.args, ["/d", "/s", "/c", "npm.cmd run check"]);
   const posix = npmCheckInvocation("linux", "npm run check");
   assert.equal(posix.program, "npm");
   assert.deepEqual(posix.args, ["run", "check"]);
@@ -157,10 +160,15 @@ test("commit message validation rejects shell metacharacters", () => {
 
 test("safe named checks map to fixed executable arrays", () => {
   assert.deepEqual(Object.keys(SAFE_CHECK_REGISTRY), ["npm-check", "bridge-tests", "diff-check"]);
-  assert.deepEqual(checkCommandsForIds(DEFAULT_SAFE_CHECK_IDS).map((entry) => ({ id: entry.id, label: entry.label, args: entry.args })), [
-    { id: "bridge-tests", label: "npm run test:bridge", args: ["run", "test:bridge"] },
-    { id: "npm-check", label: "npm run check", args: ["run", "check"] },
-    { id: "diff-check", label: "git diff --check", args: ["diff", "--check"] },
+  assert.deepEqual(checkCommandsForIds(DEFAULT_SAFE_CHECK_IDS, { platform: "linux" }).map((entry) => ({ id: entry.id, label: entry.label, command: entry.command, args: entry.args })), [
+    { id: "bridge-tests", label: "npm run test:bridge", command: "npm", args: ["run", "test:bridge"] },
+    { id: "npm-check", label: "npm run check", command: "npm", args: ["run", "check"] },
+    { id: "diff-check", label: "git diff --check", command: "git", args: ["diff", "--check"] },
+  ]);
+  assert.deepEqual(checkCommandsForIds(DEFAULT_SAFE_CHECK_IDS, { platform: "win32", env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" } }).map((entry) => ({ id: entry.id, label: entry.label, command: entry.command, args: entry.args })), [
+    { id: "bridge-tests", label: "npm run test:bridge", command: "C:\\Windows\\System32\\cmd.exe", args: ["/d", "/s", "/c", "npm.cmd run test:bridge"] },
+    { id: "npm-check", label: "npm run check", command: "C:\\Windows\\System32\\cmd.exe", args: ["/d", "/s", "/c", "npm.cmd run check"] },
+    { id: "diff-check", label: "git diff --check", command: "git", args: ["diff", "--check"] },
   ]);
 });
 
@@ -171,7 +179,7 @@ test("check selection rejects unknown ids, deduplicates duplicates, and enforces
 });
 
 test("required checks must match the fixed safe registry", () => {
-  const valid = validateRequiredChecks(["npm run test:bridge", "npm run check", "git diff --check"], ["npm-check", "bridge-tests", "diff-check"]);
+  const valid = validateRequiredChecks(["npm run test:bridge", "npm run check", "git diff --check"], ["npm-check", "bridge-tests", "diff-check"], { platform: "win32", env: { ComSpec: "cmd.exe" } });
   assert.equal(valid.valid, true);
   assert.deepEqual(valid.ids, ["npm-check", "bridge-tests", "diff-check"]);
   assert.equal(validateRequiredChecks(["npm run check"], ["npm-check"]).valid, false);
@@ -197,4 +205,64 @@ test("status snapshots keep lifecycle path identity stable across checks", () =>
   const generated = validateStatusSnapshot(" M docs/project-status.md\0?? docs/roadmap.md\0?? docs/generated.tmp\0", ["docs/"]);
   assert.equal(sameNormalizedPaths(child.changedPaths, postChecks.changedPaths), true);
   assert.equal(sameNormalizedPaths(child.changedPaths, generated.changedPaths), false);
+});
+
+test("task status snapshots require explicit task allowlists and reject silent fallback", () => {
+  assert.deepEqual(validateTaskAllowedPaths(["docs/AGENT_BRIDGE.md"]), { valid: true, category: null, permitted: ["docs/AGENT_BRIDGE.md"] });
+  assert.equal(validateTaskAllowedPaths().valid, false);
+  const missing = validateTaskStatusSnapshot(" M docs/AGENT_BRIDGE.md\0", null);
+  assert.equal(missing.valid, false);
+  assert.equal(missing.category, "missing_task_allowed_paths");
+});
+
+test("task allowlist passes only the exact issue-scoped file", () => {
+  const allowed = ["docs/AGENT_BRIDGE.md"];
+  assert.equal(validateTaskStatusSnapshot(" M docs/AGENT_BRIDGE.md\0", allowed).valid, true);
+  assert.equal(validateTaskStatusSnapshot(" M package.json\0", allowed).valid, false);
+  assert.equal(validateTaskStatusSnapshot(" M docs/roadmap.md\0", allowed).valid, false);
+});
+
+test("repository-approved paths are still rejected when absent from the issue contract", () => {
+  const allowed = ["docs/AGENT_BRIDGE.md"];
+  const snapshot = validateTaskStatusSnapshot(" M package.json\0", allowed);
+  assert.equal(snapshot.valid, false);
+  assert.deepEqual(snapshot.invalid, ["package.json"]);
+});
+
+test("task allowlist accepts unicode and spaces when explicitly allowed", () => {
+  const allowed = ["docs/space name-ю.md"];
+  assert.equal(validateTaskStatusSnapshot(" M docs/space name-ю.md\0", allowed).valid, true);
+});
+
+test("rename validation enforces both source and destination paths", () => {
+  assert.equal(validateTaskStatusSnapshot("R  docs/AGENT_BRIDGE.md\0docs/other.md\0", ["docs/AGENT_BRIDGE.md"]).valid, false);
+  assert.equal(validateTaskStatusSnapshot("R  docs/other.md\0docs/AGENT_BRIDGE.md\0", ["docs/AGENT_BRIDGE.md"]).valid, false);
+  assert.equal(validateTaskStatusSnapshot("R  docs/old.md\0docs/new.md\0", ["docs/old.md", "docs/new.md"]).valid, true);
+});
+
+test("copy validation enforces both source and destination paths", () => {
+  assert.equal(validateTaskStatusSnapshot("C  docs/AGENT_BRIDGE.md\0docs/copied.md\0", ["docs/AGENT_BRIDGE.md"]).valid, false);
+  assert.equal(validateTaskStatusSnapshot("C  docs/old.md\0docs/new.md\0", ["docs/old.md", "docs/new.md"]).valid, true);
+});
+
+test("post-check generated out-of-scope files fail the task snapshot boundary", () => {
+  const allowed = ["docs/AGENT_BRIDGE.md"];
+  const child = validateTaskStatusSnapshot(" M docs/AGENT_BRIDGE.md\0", allowed);
+  const postCheck = validateTaskStatusSnapshot(" M docs/AGENT_BRIDGE.md\0?? package.json\0", allowed);
+  assert.equal(child.valid, true);
+  assert.equal(postCheck.valid, false);
+});
+
+test("windows adapter prefers a safe ComSpec and falls back to cmd.exe", () => {
+  assert.equal(windowsCommandProcessor({ ComSpec: "C:\\Windows\\System32\\cmd.exe" }), "C:\\Windows\\System32\\cmd.exe");
+  assert.equal(windowsCommandProcessor({ ComSpec: "powershell.exe" }), "cmd.exe");
+  assert.deepEqual(npmCheckInvocation("win32", "npm run check", { ComSpec: "cmd.exe" }), { program: "cmd.exe", args: ["/d", "/s", "/c", "npm.cmd run check"] });
+  assert.deepEqual(npmCheckInvocation("linux", "npm run check"), { program: "npm", args: ["run", "check"] });
+});
+
+test("check command results are defensive copies", () => {
+  const first = checkCommandsForIds(["bridge-tests"], { platform: "win32", env: { ComSpec: "cmd.exe" } });
+  first[0].args.push("mutated");
+  const second = checkCommandsForIds(["bridge-tests"], { platform: "win32", env: { ComSpec: "cmd.exe" } });
+  assert.deepEqual(second[0].args, ["/d", "/s", "/c", "npm.cmd run test:bridge"]);
 });
