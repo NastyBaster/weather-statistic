@@ -161,9 +161,6 @@ Deno.test("handler rejects spoofing and malformed request bodies", async () => {
     "x-forecast-trigger",
     "x-scheduler-trigger",
     "x-forecast-identity",
-    "x-run-trigger",
-    "x-correlation-id",
-    "x-runtime-transport",
   ] as const;
   const cases = [
     [
@@ -248,6 +245,142 @@ Deno.test(
     assertEquals(collected, 1);
   },
 );
+
+Deno.test("unknown inert transport headers do not alter the manual trigger", async () => {
+  for (
+    const headerName of [
+      "x-run-trigger",
+      "x-correlation-id",
+      "x-runtime-transport",
+    ] as const
+  ) {
+    let collected = 0;
+    const response = await handler(
+      request("admin-jwt", "{}", { [headerName]: "opaque" }),
+      baseEnvironment,
+      {
+        ...dependencies(success),
+        collect: ((
+          _db: unknown,
+          _now: unknown,
+          _provider: unknown,
+          trigger: "manual" | "scheduled",
+        ) => {
+          collected += 1;
+          assertEquals(trigger, "manual");
+          return Promise.resolve(success);
+        }) as never,
+      },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(collected, 1);
+  }
+});
+
+Deno.test("multiple arbitrary inert headers do not alter the manual trigger", async () => {
+  let collected = 0;
+  const response = await handler(
+    request("admin-jwt", "{}", {
+      "x-run-trigger": "retry",
+      "x-correlation-id": "opaque",
+      "x-runtime-transport": "worker",
+      "x-future-gateway-header": "future",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: ((
+        _db: unknown,
+        _now: unknown,
+        _provider: unknown,
+        trigger: "manual" | "scheduled",
+      ) => {
+        collected += 1;
+        assertEquals(trigger, "manual");
+        return Promise.resolve(success);
+      }) as never,
+    },
+  );
+  assertEquals(response.status, 200);
+  assertEquals(collected, 1);
+});
+
+Deno.test("multiple arbitrary inert headers do not alter the scheduled trigger", async () => {
+  let collected = 0;
+  const response = await handler(
+    request(schedulerToken, "{}", {
+      "x-run-trigger": "manual",
+      "x-correlation-id": "opaque",
+      "x-runtime-transport": "worker",
+      "x-supabase-gateway-future": "future",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: ((
+        _db: unknown,
+        _now: unknown,
+        _provider: unknown,
+        trigger: "manual" | "scheduled",
+      ) => {
+        collected += 1;
+        assertEquals(trigger, "scheduled");
+        return Promise.resolve(success);
+      }) as never,
+    },
+  );
+  assertEquals(response.status, 200);
+  assertEquals(collected, 1);
+});
+
+Deno.test("manual and scheduled capability stay derived from authorize only", async () => {
+  let manualTrigger: "manual" | "scheduled" | null = null;
+  let scheduledTrigger: "manual" | "scheduled" | null = null;
+
+  const manualResponse = await handler(
+    request("admin-jwt", "{}", {
+      "x-run-trigger": "scheduled",
+      "x-correlation-id": "opaque",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: ((
+        _db: unknown,
+        _now: unknown,
+        _provider: unknown,
+        trigger: "manual" | "scheduled",
+      ) => {
+        manualTrigger = trigger;
+        return Promise.resolve(success);
+      }) as never,
+    },
+  );
+  assertEquals(manualResponse.status, 200);
+  assertEquals(manualTrigger, "manual");
+
+  const scheduledResponse = await handler(
+    request(schedulerToken, "{}", {
+      "x-run-trigger": "manual",
+      "x-runtime-transport": "opaque",
+    }),
+    baseEnvironment,
+    {
+      ...dependencies(success),
+      collect: ((
+        _db: unknown,
+        _now: unknown,
+        _provider: unknown,
+        trigger: "manual" | "scheduled",
+      ) => {
+        scheduledTrigger = trigger;
+        return Promise.resolve(success);
+      }) as never,
+    },
+  );
+  assertEquals(scheduledResponse.status, 200);
+  assertEquals(scheduledTrigger, "scheduled");
+});
 
 Deno.test("handler distinguishes size boundaries and UTF-8 byte length", async () => {
   const exact = `{${" ".repeat(1022)}}`;

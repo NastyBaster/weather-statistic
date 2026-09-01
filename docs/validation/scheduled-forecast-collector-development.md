@@ -14,6 +14,9 @@ Edge Function was deployed, or a Cron job was enabled. Production was not access
   the opaque scheduler Bearer secret or an allowlisted Supabase user JWT.
 - Authentication derives `scheduled` or `manual`; request content cannot select `retry`.
 - Requests require `POST` and an empty JSON object, and reject trigger/identity spoof headers.
+- The primary request boundary is auth-derived: only `Authorization` is consumed for identity and
+  trigger derivation. Arbitrary transport, tracing, proxy, browser, CDN, and gateway headers are
+  inert because the handler never reads them for capability decisions.
 - A partial unique index and transactional claim RPC enforce one running scheduled run. The RPC
   uses a fixed advisory transaction lock, locks the active parent row, rejects an age below 15
   minutes, and atomically terminalizes an inclusively stale run before claiming its replacement.
@@ -27,10 +30,20 @@ Edge Function was deployed, or a Cron job was enabled. Production was not access
   provider attempts, backoff sleeps, database setup, and snapshot writes are deadline-aware.
 - The scheduler credential is validated as exactly 32 bytes encoded as 43 unpadded base64url ASCII
   characters before authentication is enabled. Invalid managed configuration fails closed.
-- The request surface requires JSON `{}` and permits only reviewed gateway/application headers;
-  request data cannot select trigger, identity, retry, slot, or caller time.
+- The request surface requires JSON `{}`. Arbitrary transport headers remain inert, request data
+  cannot select trigger, identity, retry, slot, or caller time, and the reviewed legacy spoofing
+  header denylist remains blocked only as defense in depth.
 - The migrations grant all three operational RPCs only to `service_role`; browser RLS and grants
   are unchanged.
+
+## Superseded request-header inventory decision
+
+The earlier Stage 5.2.1 repository decision to accept only a reviewed inventory of
+gateway/application headers is superseded on **2026-08-31**. Review showed that the inventory
+approach is brittle behind Node, browser, proxy, CDN, and Supabase gateway infrastructure, while
+rejected-header diagnostics cannot safely log caller-controlled names. The reviewed invariant is
+now that transport/gateway headers are inert and ignored unless they match the small documented
+legacy spoofing denylist; `Authorization` remains the sole capability-bearing request header.
 
 ## Local checks
 
@@ -64,8 +77,8 @@ unknown-status, or active-run results before cleanup.
 
 Strict request-contract rejections retain the top-level `invalid_request` error and add one stable,
 non-sensitive reason code for development and operational diagnosis. The reason enum covers
-unsupported content types, forbidden headers, invalid JSON, non-object bodies, and non-empty
-objects; raw request/response logs remain prohibited.
+unsupported content types, forbidden legacy spoofing headers, invalid JSON, non-object bodies, and
+non-empty objects; raw request/response logs remain prohibited.
 
 The enqueue artifact repeats safety-critical checks in its own write transaction immediately
 before its one `pg_net` call. It uses the same advisory lock as the scheduled claim protocol,

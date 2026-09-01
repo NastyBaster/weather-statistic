@@ -75,11 +75,15 @@ service-role key remains only in managed Edge runtime and never enters Vault or 
 ## 5. Request and run contract
 
 - `POST /functions/v1/collect-forecasts`; other methods return 405.
-- One Bearer credential and `Content-Type: application/json`; no custom scheduler slot,
-  timestamp, trigger, identity, or correlation header is sent.
+- One Bearer credential and `Content-Type: application/json`; the function consumes
+  `Authorization` for authentication and trigger derivation, and does not depend on a global
+  allowlist of transport, proxy, browser, CDN, tracing, or gateway headers.
 - Body is exactly `{}`. Invalid JSON, any key, array/scalar, or oversized body returns 400 before
-  run creation. Any custom header purporting to select identity or trigger also returns 400 before
-  run creation.
+  run creation. Arbitrary transport/gateway headers are inert because the handler never consumes
+  them for identity, trigger, retry mode, caller time, scheduler slot, or run ownership.
+- As defense in depth, a small reviewed legacy spoofing denylist remains blocked with 400 before
+  run creation: `x-trigger-type`, `x-caller-time`, `x-scheduler-slot`, `x-identity`, `trigger`,
+  `scheduler-slot`, `x-forecast-trigger`, `x-scheduler-trigger`, and `x-forecast-identity`.
 - Machine authentication creates `scheduled`; preserved allowlisted operator authentication
   creates `manual`. Stage 5.2.1 implements no writer or HTTP surface for `trigger_type='retry'`.
   That schema value is reserved for a separate future reviewed contract/stage.
@@ -286,7 +290,8 @@ cadence/window, and bounded cron/`pg_net` rollout observation—never a caller-c
 
 Never expose in logs/evidence: JWTs, Authorization headers, scheduler secrets, service-role keys,
 secret digests, user UUIDs, project references, emails, provider bodies, full database errors,
-connection strings, sensitive stack traces, or raw log exports. Use fixed categories and counters.
+connection strings, sensitive stack traces, raw request headers, or raw log exports. Use fixed
+categories and counters.
 
 ## 10. Stage 5.2.1 development validation gate
 
@@ -298,9 +303,9 @@ These are future specifications; Stage 5.2.0 runs no remote validation.
 | Authenticated non-admin | 403; no run. |
 | Allowlisted manual operator | Existing behavior; exactly one `manual` run. |
 | Valid scheduled call | Accepted; exactly one `scheduled` run. |
-| Spoof body/identity/trigger | Every non-empty body rejected 400; headers cannot select identity, `manual`, `scheduled`, or `retry`; auth alone derives trigger. |
-| Manual request selects retry | Body or custom trigger header is rejected 400 before run creation; an allowlisted user can create only `manual`. |
-| Scheduled request selects retry | Body or custom trigger header is rejected 400 before run creation; machine authentication can create only `scheduled`. |
+| Spoof body/identity/trigger | Every non-empty body rejected 400; arbitrary transport headers remain inert; auth alone derives identity and trigger. |
+| Manual request selects retry | Body is rejected 400 before run creation, reviewed legacy spoofing headers are rejected 400, and an allowlisted user can create only `manual`. |
+| Scheduled request selects retry | Body is rejected 400 before run creation, reviewed legacy spoofing headers are rejected 400, and machine authentication can create only `scheduled`. |
 | Repeated allowlisted operator call | Creates a new `manual` run; no request surface can select `retry`. |
 | Duplicate after terminal | New run; existing identities unchanged; only missing snapshots counted. |
 | Concurrent overlap | One claim; other gets 409 and performs no provider work. |
@@ -374,7 +379,7 @@ observations, accuracy, real-data UI, geocoding, or unrelated work occurs in thi
 | Machine auth | 256-bit random base64url opaque Bearer, only Vault + Edge secret, constant-time validation. |
 | Manual auth | Existing user JWT + `FORECAST_ADMIN_USER_IDS`. |
 | Service role | Managed Edge runtime only; never scheduler/request. |
-| Trigger | machine=`scheduled`; operator=`manual`; Stage 5.2.1 implements no `trigger_type='retry'` writer or retry endpoint, and that schema value remains reserved. |
+| Trigger | machine=`scheduled`; operator=`manual`; arbitrary transport headers are inert; reviewed legacy spoofing headers are blocked defense-in-depth; Stage 5.2.1 implements no `trigger_type='retry'` writer or retry endpoint, and that schema value remains reserved. |
 | Cadence | `17 4 * * *`, 04:17 UTC; no catch-up; two-hour lateness. |
 | Single flight / stale | Scheduler-wide advisory transaction lock + partial unique index; stale iff database transaction age is `>= interval '15 minutes'`; parent `FOR UPDATE`, counter-preserving terminalization, and replacement are one transaction or create no replacement. |
 | Snapshot write fence | Canonical batch RPC and `BEFORE INSERT` invariant trigger use parent `FOR NO KEY UPDATE` in the insertion transaction; only `running` parents accept immutable inserts. |

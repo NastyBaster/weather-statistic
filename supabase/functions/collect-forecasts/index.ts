@@ -14,36 +14,24 @@ const json = (body: unknown, status = 200) =>
 export const collectionHttpStatus = (status: string) =>
   status === "failed" ? 500 : 200;
 
-const ALLOWED_APPLICATION_HEADERS = new Set([
-  "accept",
-  "accept-encoding",
-  "accept-language",
-  "apikey",
-  "authorization",
-  "connection",
-  "content-length",
-  "content-type",
-  "host",
-  "origin",
-  "referer",
-  "traceparent",
-  "tracestate",
-  "user-agent",
-  "x-client-info",
-  "x-forwarded-for",
-  "x-forwarded-host",
-  "x-forwarded-port",
-  "x-forwarded-proto",
-  "x-real-ip",
+// Defense in depth only: capability is derived from Authorization, not from
+// transport headers. These legacy names stay blocked to fail closed on
+// reviewed spoofing attempts without depending on a brittle header inventory.
+const LEGACY_SPOOFING_HEADERS = new Set([
+  "x-trigger-type",
+  "x-caller-time",
+  "x-scheduler-slot",
+  "x-identity",
+  "trigger",
+  "scheduler-slot",
+  "x-forecast-trigger",
+  "x-scheduler-trigger",
+  "x-forecast-identity",
 ]);
 
 export function hasDisallowedApplicationHeader(headers: Headers): boolean {
   for (const name of headers.keys()) {
-    if (
-      !ALLOWED_APPLICATION_HEADERS.has(name) &&
-      !name.startsWith("cf-") &&
-      !name.startsWith("sec-fetch-")
-    ) return true;
+    if (LEGACY_SPOOFING_HEADERS.has(name.toLowerCase())) return true;
   }
   return false;
 }
