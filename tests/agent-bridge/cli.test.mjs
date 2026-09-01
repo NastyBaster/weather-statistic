@@ -72,6 +72,19 @@ test("task allowlist violation blocks before staging commit push and pr creation
   assert.match(source, /if \(!postChecks\.valid\) throw new Error\(postChecks\.category \|\| "unsafe_changed_paths"\);[\s\S]*await git\(\["add", "--", \.\.\.changed\], worktree\);/);
 });
 
+test("retained cleanup state is written only after verified handoff prerequisites", async () => {
+  const source = await readFile(cliPath, "utf8");
+  assert.match(source, /if \(\(await git\(\["rev-parse", "HEAD"\], worktree\)\)\.trim\(\) !== committedHead\) throw new Error\("handoff_head_mismatch"\);[\s\S]*await ensureWorktreeClean\(worktree\);[\s\S]*await writeRetainedTaskState\(runtimeRoot\(\), buildRetainedTaskState\(\{ issueNumber: issue\.number, prNumber, expectedBranch: branch, expectedHead: committedHead \}\)\);/);
+});
+
+test("cli exposes explicit cleanup and recovery commands", async () => {
+  const source = await readFile(cliPath, "utf8");
+  assert.match(source, /command === "cleanup"/);
+  assert.match(source, /command === "recover"/);
+  assert.match(source, /cleanupRetainedTask\(runtimeRoot\(\), await cleanupOperations\(\), cleanupConfig\(argv\.slice\(1\)\)\)/);
+  assert.match(source, /inspectCleanupRecovery\(runtimeRoot\(\),/);
+});
+
 test("windows adapter can execute a harmless fixed npm fixture when running on Windows", async () => {
   if (process.platform !== "win32") return;
   const workdir = await mkdtemp(path.join(os.tmpdir(), "bridge-npm-fixture-"));

@@ -5,7 +5,8 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { parseConfig, dryRunPlan, eligible, branchFor, promptFor, sanitize, parseIssueContract, validateRequiredChecks, prBody, worktreePath, childEnvironment, codexSandboxArgs, validateCommitMessage, validateCheckSelection, validateTaskStatusSnapshot, sameNormalizedPaths } from "./core.mjs";
-import { acquireOwnership } from "./ownership.mjs";
+import { acquireOwnership, ownerPresent } from "./ownership.mjs";
+import { buildRetainedTaskState, classifySingletonState, cleanupRetainedTask, inspectCleanupRecovery, parseWorktreeList, writeRetainedTaskState } from "./cleanup.mjs";
 import { runDoctor, createRealDoctorAdapter } from "./doctor.mjs";
 
 export function runtimeRoot() { return path.join(process.env.LOCALAPPDATA || os.tmpdir(), "ForecastRealityCheck", "agent-bridge", "weather-statistic"); }
@@ -27,6 +28,7 @@ async function gh(args) { return (await run("gh", args)).stdout; }
 async function git(args, cwd = root) { return (await run("git", args, cwd)).stdout; }
 async function pathExists(target) { try { await access(target); return true; } catch { return false; } }
 async function gitPathExists(relativePath) { return pathExists((await git(["rev-parse", "--git-path", relativePath])).trim()); }
+async function ghJson(args) { return JSON.parse(await gh(args)); }
 async function codexInvocation() {
   if (process.platform !== "win32") return { command: "codex", args: [] };
   const where = (await run("where.exe", ["codex.cmd"])).stdout.split(/\r?\n/).find(Boolean);
@@ -61,16 +63,13 @@ async function ensureCanonicalCheckoutClean(cwd = root) {
   if ((await git(["branch", "--show-current"], cwd)).trim() !== "main") throw new Error("main_required");
   if ((await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd)).length > 0) throw new Error("dirty_worktree");
 }
-async function ensureSingleRootWorktree(cwd = root) {
-  const worktreeCount = (await git(["worktree", "list", "--porcelain"], cwd))
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("worktree ")).length;
-  if (worktreeCount !== 1) throw new Error("unexpected_existing_worktree");
-}
 async function ensureNoInProgressGitOperation(cwd = root) {
   for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply"]) {
     if (await gitPathExists(marker)) throw new Error("git_operation_in_progress");
   }
+}
+async function listWorktrees(cwd = root) {
+  return parseWorktreeList(await git(["worktree", "list", "--porcelain"], cwd));
 }
 export async function statusSnapshot(cwd, taskAllowedPaths, gitReader = git) {
   if (!Array.isArray(taskAllowedPaths) || taskAllowedPaths.length === 0) throw new Error("missing_task_allowed_paths");
@@ -85,9 +84,77 @@ async function ensureWorktreeClean(cwd) {
   const snapshot = await repositoryStatusSnapshot(cwd);
   if (snapshot.records.length > 0) throw new Error("unexpected_dirty_worktree");
 }
+async function readPullRequestStatus(prNumber) {
+  const pr = await ghJson(["pr", "view", String(prNumber), "--json", "number,state,headRefName,baseRefName,headRefOid,isDraft,mergedAt"]);
+  return {
+    number: pr.number,
+    state: pr.state,
+    headRefName: pr.headRefName,
+    baseRefName: pr.baseRefName,
+    headRefOid: pr.headRefOid || null,
+    mergedAt: pr.mergedAt || null,
+    repository: "NastyBaster/weather-statistic",
+  };
+}
+async function classifyLiveTaskPreflight() {
+  return classifySingletonState({
+    runtimeRoot: runtimeRoot(),
+    rootPath: root,
+    ownerPresent: await ownerPresent(runtimeRoot()),
+    listWorktrees: async () => await git(["worktree", "list", "--porcelain"], root),
+    readPullRequest: readPullRequestStatus,
+  });
+}
+async function cleanupOperations() {
+  return {
+    io: undefined,
+    ownerPresent: async () => ownerPresent(runtimeRoot()),
+    rootPath: async () => root,
+    listWorktrees: async () => await git(["worktree", "list", "--porcelain"], root),
+    readPullRequest: readPullRequestStatus,
+    issueClosed: async (issueNumber) => (await ghJson(["issue", "view", String(issueNumber), "--json", "state"])).state === "CLOSED",
+    remoteBranchExists: async (branch) => Boolean((await git(["ls-remote", "--heads", "origin", `refs/heads/${branch}`], root)).trim()),
+    worktreeGitOperationInProgress: async (worktree) => {
+      for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply"]) {
+        if (await pathExists((await git(["rev-parse", "--git-path", marker], worktree)).trim())) return true;
+      }
+      return false;
+    },
+    isWorktreeClean: async (worktree) => (await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], worktree)).length === 0,
+    removeWorktree: async (worktree) => { await git(["worktree", "remove", worktree], root); },
+    pruneWorktrees: async () => { await git(["worktree", "prune"], root); },
+    isLocalBranchAttached: async (branch) => (await listWorktrees(root)).some((entry) => entry.branch === `refs/heads/${branch}`),
+    localBranchExists: async (branch) => {
+      try {
+        await git(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], root);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    deleteLocalBranch: async (branch) => { await git(["branch", "-d", branch], root); },
+    rootIsClean: async () => (await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], root)).length === 0,
+    rootHead: async () => (await git(["rev-parse", "HEAD"], root)).trim(),
+    mainHead: async () => (await git(["rev-parse", "origin/main"], root)).trim(),
+  };
+}
+function cleanupConfig(args = []) {
+  const issueFlag = args.indexOf("--issue");
+  if (issueFlag === -1) return { issueNumber: null };
+  const raw = args[issueFlag + 1];
+  const issueNumber = Number.parseInt(raw, 10);
+  if (!raw || !Number.isSafeInteger(issueNumber) || issueNumber < 1) throw new Error("cleanup_issue_requires_positive_integer");
+  return { issueNumber };
+}
 export async function once(config = parseConfig(process.argv.slice(3))) {
   const runId = "run-" + new Date().toISOString().replace(/[-:.TZ]/g, "") + "-" + randomBytes(4).toString("hex");
-  if (config.dryRun) { console.log(JSON.stringify({ command: "once", runId, ...dryRunPlan(null) })); return; }
+  const preflight = await classifyLiveTaskPreflight().catch((error) => ({ blocked: true, category: sanitize(error?.message || error) }));
+  if (config.dryRun) {
+    const dryRun = { command: "once", runId, ...dryRunPlan(null) };
+    if (preflight.blocked) dryRun.category = preflight.category;
+    console.log(JSON.stringify(dryRun));
+    return;
+  }
   const commitMessage = validateCommitMessage(config.commitMessage);
   if (!commitMessage.valid) { console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: commitMessage.category, mutations: 0 })); process.exitCode = 1; return; }
   const selectedChecks = validateCheckSelection(config.checkIds);
@@ -96,8 +163,8 @@ export async function once(config = parseConfig(process.argv.slice(3))) {
   if (!doctor.pass) { console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: "doctor_failed", mutations: 0, failures: doctor.failures })); process.exitCode = 1; return; }
   try {
     await ensureCanonicalCheckoutClean(root);
-    await ensureSingleRootWorktree(root);
     await ensureNoInProgressGitOperation(root);
+    if (preflight.blocked) throw new Error(preflight.category);
   } catch (error) {
     console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: sanitize(error?.message || error), mutations: 0 }));
     process.exitCode = 1;
@@ -148,6 +215,7 @@ export async function once(config = parseConfig(process.argv.slice(3))) {
     const pr = { number: prNumber };
     if ((await git(["rev-parse", "HEAD"], worktree)).trim() !== committedHead) throw new Error("handoff_head_mismatch");
     await ensureWorktreeClean(worktree);
+    await writeRetainedTaskState(runtimeRoot(), buildRetainedTaskState({ issueNumber: issue.number, prNumber, expectedBranch: branch, expectedHead: committedHead }));
     await writeAudit(runId, { phase: "handoff", issue: issue.number, branch, childOutcome: "success", changedPaths: changed, checks: checks.ids, pr: prNumber, outcome: "handoff" });
     await handoff(issue.number, runId, branch, pr);
     console.log(JSON.stringify({ command: "once", runId, outcome: "handoff", issue: issue.number, branch, pullRequest: pr.number, changedPaths: changed }));
@@ -170,8 +238,30 @@ export async function main(argv = process.argv.slice(2)) {
     process.exitCode = result.pass ? 0 : 1;
   } else if (command === "once") {
     await once(config);
+  } else if (command === "cleanup") {
+    try {
+      const result = await cleanupRetainedTask(runtimeRoot(), await cleanupOperations(), cleanupConfig(argv.slice(1)));
+      console.log(JSON.stringify({ command: "cleanup", ...result }));
+      process.exitCode = result.cleanup === "complete" || result.cleanup === "idempotent" ? 0 : 1;
+    } catch (error) {
+      console.log(JSON.stringify({ command: "cleanup", cleanup: "blocked", category: sanitize(error?.message || error) }));
+      process.exitCode = 1;
+    }
+  } else if (command === "recover") {
+    try {
+      const operations = await cleanupOperations();
+      const result = await inspectCleanupRecovery(runtimeRoot(), {
+        ...operations,
+        io: undefined,
+      });
+      console.log(JSON.stringify({ command: "recover", ...result }));
+      process.exitCode = 0;
+    } catch (error) {
+      console.log(JSON.stringify({ command: "recover", category: sanitize(error?.message || error) }));
+      process.exitCode = 1;
+    }
   } else {
-    console.error("Usage: bridge <doctor|once> [--dry-run]");
+    console.error("Usage: bridge <doctor|once|cleanup|recover> [--dry-run]");
     process.exitCode = 2;
   }
 }
