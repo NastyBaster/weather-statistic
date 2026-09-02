@@ -24,6 +24,7 @@
     "check": "node scripts/check-js.mjs && npm run test:bridge && npm test && npm run build",
     "bridge:doctor": "node scripts/agent-bridge/cli.mjs doctor",
     "bridge:once": "node scripts/agent-bridge/cli.mjs once",
+    "bridge:cleanup": "node scripts/agent-bridge/cli.mjs cleanup",
     "test:bridge": "node --test tests/agent-bridge/*.test.mjs"
   },
   "engines": {
