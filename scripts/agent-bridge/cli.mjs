@@ -148,8 +148,8 @@ function cleanupConfig(args = []) {
 }
 export async function once(config = parseConfig(process.argv.slice(3))) {
   const runId = "run-" + new Date().toISOString().replace(/[-:.TZ]/g, "") + "-" + randomBytes(4).toString("hex");
-  const preflight = await classifyLiveTaskPreflight().catch((error) => ({ blocked: true, category: sanitize(error?.message || error) }));
   if (config.dryRun) {
+    const preflight = await classifyLiveTaskPreflight().catch((error) => ({ blocked: true, category: sanitize(error?.message || error) }));
     const dryRun = { command: "once", runId, ...dryRunPlan(null) };
     if (preflight.blocked) dryRun.category = preflight.category;
     console.log(JSON.stringify(dryRun));
@@ -161,6 +161,7 @@ export async function once(config = parseConfig(process.argv.slice(3))) {
   if (!selectedChecks.valid) { console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: selectedChecks.category, mutations: 0 })); process.exitCode = 1; return; }
   const doctor = await runDoctor(createRealDoctorAdapter(root), runtimeRoot());
   if (!doctor.pass) { console.log(JSON.stringify({ command: "once", runId, outcome: "blocked", category: "doctor_failed", mutations: 0, failures: doctor.failures })); process.exitCode = 1; return; }
+  const preflight = await classifyLiveTaskPreflight().catch((error) => ({ blocked: true, category: sanitize(error?.message || error) }));
   try {
     await ensureCanonicalCheckoutClean(root);
     await ensureNoInProgressGitOperation(root);
