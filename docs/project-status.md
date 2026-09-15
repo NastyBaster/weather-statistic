@@ -26,13 +26,17 @@ Google OAuth is configured and working in development and production.
 
 - **Development:** authentication, profiles, personal locations, forecast schema, manual
   collection, and the hardened scheduler path have been validated. The scheduler remains disabled.
-- **Production:** Cloudflare Pages serves the merged `main` deployment. No production scheduler
-  or migration operation was performed during this validation.
-- **Sanitized collector baseline:** 2 terminal successful manual runs, 0 running runs, 24
-  snapshots, and 0 duplicate identities. The first run created 24 snapshots and the same-local-date
-  second run created 0. RLS, immutability, and sanitized log review passed.
+- **Production:** Cloudflare Pages serves the merged `main` deployment. On 2026-09-15 the
+  explicitly authorized production database reset removed disposable data and replayed all six
+  repository migrations. The reviewed `collect-forecasts` function was redeployed; the scheduler
+  remains disabled.
+- **Production reset baseline:** `profiles`, `locations`, `forecast_runs`, and
+  `forecast_snapshots` are present, protected by RLS, and contain zero rows after the reset.
+  Production has no `pg_cron` or `pg_net` scheduler extensions enabled. Historical production
+  rows are not recoverable from the reset itself and would require a Supabase backup/export.
 
-There is no scheduler and no production UI trigger. Personal locations are real, but UI weather
+There is no scheduler and no production UI trigger. Personal locations are real when users add
+them, but UI weather
 and history remain intentionally demonstrative; production snapshots are not displayed. Never
 mix demo and real data without an explicit, visible boundary. Observations, accuracy calculations,
 and the real-data dashboard remain deferred. Global geocoding is optional and deferred.
