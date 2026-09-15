@@ -60,9 +60,10 @@ These items do not block the core weather pipeline and require separate bounded 
 The scheduler contract and repository hardening are merged to `main`; the authorized development
 smoke is complete, but Stage 5.2.1 remains in progress until the full matrix is evidenced. No
 development Cron job is configured or enabled; the one-off manual enqueue produced sanitized
-terminal evidence and no active run. Production scheduling is unchanged and requires a separate
-approved operational stage. Observations, accuracy, geocoding, and other future functionality
-remain deferred.
+terminal evidence and no active run. On 2026-09-15 the explicitly authorized production reset
+replayed all six repository migrations and redeployed the reviewed collector with an empty data
+baseline. Production scheduling remains disabled and requires a separate approved operational
+stage. Observations, accuracy, geocoding, and other future functionality remain deferred.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.
