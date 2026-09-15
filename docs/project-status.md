@@ -19,6 +19,7 @@ procedures and raw evidence out of this file.
 | 5.1.1 | Production collector rollout and sanitized validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
+| 5.3 | Operational observability for collection health and failures without sensitive logs | In progress |
 
 Google OAuth is configured and working in development and production.
 
@@ -49,6 +50,11 @@ Remote evidence covered authenticated admin and non-admin paths, spoofing reject
 parallel manual calls, the zero-active-location path, a partial provider failure, RLS/immutability
 boundaries, duplicate identity checks, and final disabled-scheduler state. The development
 scheduler remains disabled; production scheduling is still a separate approved operational stage.
+
+Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC in `main` and applied
+to development. It returns only scheduled-run freshness, terminal counters, running-age, and
+missing-window signals. Explicit browser-role revocation was verified on the hosted development
+project. Production migration and operational polling remain pending.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
