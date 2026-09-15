@@ -29,8 +29,8 @@ deploy, invoke, or operate them.
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
 | **5.2.1** | **Repository hardening and the authorized development validation matrix are complete. Remote evidence covers authenticated admin/non-admin paths, spoofing rejection, repeated and parallel calls, provider failure, no-active-location, RLS/immutability, duplicate identities, and disabled-scheduler verification.** | **Complete** |
 | **5.3** | **Operational observability for collection health and failures without sensitive logs. The service-role health RPC and machine-token Telegram monitor are merged and validated in development; production rollout and regular polling remain pending.** | **In progress** |
-| 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
-| 7.0 | Observation provider contract and immutable observation schema | Planned |
+| **6** | **Forecast history backed by real snapshots with an explicit demo/real boundary. Authenticated users read their RLS-scoped snapshots; observation-based actuals and accuracy remain deferred.** | **Complete** |
+| **7.0** | **Observation provider contract and immutable observation schema. Development migration is applied and RLS/immutability boundaries are validated; collection remains deferred.** | **Complete** |
 | 7.1 | Manual observation collector with authorization, idempotency, and validation | Planned |
 | 7.2 | Scheduled observations using a separately approved operational contract | Planned |
 | 8.0 | Accuracy contract, including sample-size rules and explicit precipitation-event metrics | Planned |
