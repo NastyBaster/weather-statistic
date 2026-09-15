@@ -99,6 +99,16 @@ h1 em {
   box-shadow: var(--shadow);
 }
 
+.dashboard-state {
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--card);
+  font-weight: 700;
+}
+
 .locations-guest,
 .locations-state { color: var(--muted); }
 .locations-guest .button,
