@@ -1,0 +1,32 @@
+name: Forecast health polling
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Poll configured health monitor
+        env:
+          MONITOR_URL: ${{ vars.FORECAST_HEALTH_MONITOR_URL }}
+          MONITOR_TOKEN: ${{ secrets.FORECAST_HEALTH_MONITOR_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$MONITOR_URL" || -z "$MONITOR_TOKEN" ]]; then
+            echo "Forecast health polling is not configured yet; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $MONITOR_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "$MONITOR_URL"
