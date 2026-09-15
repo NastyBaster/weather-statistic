@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Forecast Reality Check</title>
+  <rect width="64" height="64" rx="14" fill="#142b3a"/>
+  <text x="8" y="47" fill="#f4f7f8" font-family="Arial, sans-serif" font-size="39" font-weight="700">F</text>
+  <circle cx="48" cy="18" r="5" fill="#f4c95d"/>
+  <circle cx="48" cy="18" r="2" fill="#142b3a"/>
+</svg>
