@@ -2,7 +2,7 @@
 
 **Stage:** 5.2.1  
 **Repository implementation date:** 2026-08-23  
-**Remote development validation:** Authorized one-off smoke complete; full Stage 5.2.1 matrix remains pending
+**Remote development validation:** Authorized Stage 5.2.1 matrix complete; scheduler remains disabled
 
 This record is intentionally sanitized. The authorized development smoke proved the remote
 migration ledger, function deployment, secret-name contract, negative transport boundary, one-off
@@ -163,7 +163,7 @@ single-flight concurrency, failed replacement rollback, both parent-lock orderin
 snapshot immutability. Run it with `npm run test:db` against a disposable local Supabase stack.
 
 The final check run recorded Node, Supabase CLI, and remote development access. Docker and `psql`
-were not required for the remote smoke. Production was not accessed or changed.
+were not required for the remote validation. Production was not accessed or changed.
 
 ## Local validation result (2026-08-24)
 
@@ -171,8 +171,10 @@ were not required for the remote smoke. Production was not accessed or changed.
 - Failed, skipped, and not-run database cases: 0.
 - Node and Deno checks passed.
 - The local stack was stopped after validation.
-- The authorized smoke completed on 2026-09-15; the scheduler is not enabled and production is
-  unchanged. The full remote matrix remains pending.
+- The authorized smoke and full remote matrix completed on 2026-09-15; the scheduler is not
+  enabled and production is unchanged. Evidence included admin/non-admin authorization,
+  spoofing rejection, repeated and parallel calls, zero active locations, a partial provider
+  failure, RLS/immutability boundaries, zero duplicate identities, and final disable state.
 
 ## Development schema status (2026-08-25)
 
@@ -181,10 +183,9 @@ were not required for the remote smoke. Production was not accessed or changed.
   ledger is 6/6.
 - The reviewed `collect-forecasts` Edge Function is deployed in development and the managed
   scheduler secret name is present. Vault plaintext was never selected.
-- No Cron job is configured. One authorized `pg_net` enqueue produced one succeeded scheduled run
-  for 14 locations and 112 snapshots; no duplicate identities or active runs were present. The
-  remaining authenticated, manual, concurrency, failure, no-active-location, RLS/immutability,
-  and complete disable cases are not yet evidenced remotely.
+- No Cron job is configured. Authorized manual and scheduled-path evidence produced terminal runs
+  with no duplicate identities or active runs. The development scheduler remains disabled after
+  validation; production remains unchanged.
 - Production remains unchanged.
 
 ## Development execution gate
