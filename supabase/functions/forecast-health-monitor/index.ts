@@ -3,7 +3,8 @@ import { buildAlerts, formatTelegramMessage } from "./monitor.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 function response(body: Record<string, unknown>, status = 200) {
