@@ -20,23 +20,26 @@ procedures and raw evidence out of this file.
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | In progress |
+| 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Complete |
+| 7.0 | Observation provider contract and immutable observation schema | Complete |
 
 Google OAuth is configured and working in development and production.
 
 ## Current environments
 
 - **Development:** authentication, profiles, personal locations, forecast schema, manual
-  collection, and the hardened scheduler path have been validated. The scheduler remains disabled.
+  collection, hardened scheduler path, and the observation schema have been validated. The
+  scheduler remains disabled.
 - **Production:** Cloudflare Pages serves the merged `main` deployment. On 2026-09-15 the
   explicitly authorized production database reset removed disposable data and replayed all six
   repository migrations. The reviewed `collect-forecasts` function was redeployed; the scheduler
-  remains disabled.
+  is configured with the reviewed daily Cron job; first automatic Cron acceptance remains pending.
 - **Production reset baseline:** `profiles`, `locations`, `forecast_runs`, and
   `forecast_snapshots` are present, protected by RLS, and contain zero rows after the reset.
   Production has no `pg_cron` or `pg_net` scheduler extensions enabled. Historical production
   rows are not recoverable from the reset itself and would require a Supabase backup/export.
 
-There is no scheduler and no production UI trigger. Personal locations are real when users add
+There is no production UI trigger. Personal locations are real when users add
 them, but UI weather
 and history remain intentionally demonstrative; production snapshots are not displayed. Never
 mix demo and real data without an explicit, visible boundary. Observations, accuracy calculations,
@@ -52,10 +55,19 @@ boundaries, duplicate identity checks, and final disabled-scheduler state. The d
 scheduler remains disabled; production scheduling is still a separate approved operational stage.
 
 Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC and a machine-token
-`forecast-health-monitor` Edge Function in `main`. Development has the monitor deployed with
-Supabase-managed Telegram secrets; a real Telegram delivery test passed, and scheduler expectation
-is disabled to avoid false alerts. Production migration is complete, but production monitor
-deployment, secrets, and regular polling remain pending.
+`forecast-health-monitor` Edge Function in `main`. Development and production have the monitor
+deployed with Supabase-managed Telegram secrets; GitHub Actions polls production every 15 minutes,
+and real Telegram delivery tests passed. Production's first automatic Cron acceptance remains
+pending; the configured job is not a production UI trigger.
+
+Stage 6 is complete and deployed to the frontend. Guests retain an explicitly labeled demo view;
+authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
+forecast history and honest empty/loading/error states. Actual-weather observations and accuracy remain
+deferred to Stages 7–9.
+
+Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
+schema with zero rows; no observation collector or production migration has been run. Provider
+collection, scheduling, and accuracy remain deferred to Stages 7.1, 7.2, and 8.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
