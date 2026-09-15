@@ -31,7 +31,7 @@ deploy, invoke, or operate them.
 | **5.3** | **Operational observability for collection health and failures without sensitive logs. The service-role health RPC and machine-token Telegram monitor are merged and validated in development; production rollout and regular polling remain pending.** | **In progress** |
 | **6** | **Forecast history backed by real snapshots with an explicit demo/real boundary. Authenticated users read their RLS-scoped snapshots; observation-based actuals and accuracy remain deferred.** | **Complete** |
 | **7.0** | **Observation provider contract and immutable observation schema. Development migration is applied and RLS/immutability boundaries are validated; collection remains deferred.** | **Complete** |
-| 7.1 | Manual observation collector with authorization, idempotency, and validation | Planned |
+| **7.1** | **Manual observation collector with authorization, idempotency, and validation. Development deployment and authenticated smoke acceptance completed; production remains deferred.** | **Complete** |
 | 7.2 | Scheduled observations using a separately approved operational contract | Planned |
 | 8.0 | Accuracy contract, including sample-size rules and explicit precipitation-event metrics | Planned |
 | 8.1 | Accuracy read model implementing the approved contract | Planned |
