@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.forecast-health]
 verify_jwt = false
+
+[functions.forecast-health-monitor]
+verify_jwt = false
