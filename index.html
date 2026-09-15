@@ -61,7 +61,7 @@
       <section class="dashboard" aria-labelledby="dashboard-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Демонстраційні дані</p>
+            <p class="eyebrow" data-dashboard-mode>Демонстраційні дані</p>
             <h2 id="dashboard-title">Київ · 7 серпня</h2>
           </div>
           <label class="select-label">
@@ -73,6 +73,7 @@
           </label>
         </div>
 
+        <p class="dashboard-state" data-dashboard-state role="status" aria-live="polite" hidden></p>
         <div class="stats" aria-live="polite">
           <article class="stat-card stat-card--forecast">
             <p>Обіцяли тиждень тому</p>
@@ -171,7 +172,7 @@
 
     <footer>
       <p>Навчальний проєкт про точність прогнозів</p>
-      <p>Дані на екрані поки демонстраційні</p>
+      <p data-data-note>Дані на екрані поки демонстраційні</p>
     </footer>
   </body>
 </html>

@@ -1,101 +1,172 @@
 import { initializeConnectionStatus } from "./connection-status.js";
 import { initializeDashboardAuth } from "./dashboard-auth.js";
+import { getUserLocations } from "./locations.js";
+import { getUserForecasts } from "./forecasts.js";
 import { initializeLocationsUI } from "./locations-ui.js";
 
-const cityData = {
-  kyiv: {
-    title: "Київ · 7 серпня",
-    actual: 24,
-    accuracy: 64,
-    forecasts: [
-      { date: "1 серпня", days: 7, value: 30 },
-      { date: "2 серпня", days: 6, value: 29 },
-      { date: "3 серпня", days: 5, value: 29 },
-      { date: "4 серпня", days: 4, value: 27 },
-      { date: "5 серпня", days: 3, value: 26 },
-      { date: "6 серпня", days: 2, value: 25 },
-      { date: "7 серпня", days: 1, value: 25 },
-    ],
-  },
-  lviv: {
-    title: "Львів · 7 серпня",
-    actual: 21,
-    accuracy: 72,
-    forecasts: [
-      { date: "1 серпня", days: 7, value: 25 },
-      { date: "2 серпня", days: 6, value: 24 },
-      { date: "3 серпня", days: 5, value: 24 },
-      { date: "4 серпня", days: 4, value: 23 },
-      { date: "5 серпня", days: 3, value: 22 },
-      { date: "6 серпня", days: 2, value: 22 },
-      { date: "7 серпня", days: 1, value: 21 },
-    ],
-  },
+const demoCityData = {
+  kyiv: { title: "Київ · 7 серпня", actual: 24, accuracy: 64, forecasts: [30, 29, 29, 27, 26, 25, 25] },
+  lviv: { title: "Львів · 7 серпня", actual: 21, accuracy: 72, forecasts: [25, 24, 24, 23, 22, 22, 21] },
 };
 
 const tableBody = document.querySelector("#forecast-table-body");
 const chart = document.querySelector("#forecast-chart");
 const citySelect = document.querySelector("#city-select");
 const sortButton = document.querySelector("[data-sort='forecast']");
+const dashboardState = document.querySelector("[data-dashboard-state]");
+const modeLabel = document.querySelector("[data-dashboard-mode]");
 let sortDescending = true;
+let realLocations = [];
+let realForecasts = [];
+let currentSession = null;
+let loadVersion = 0;
 
 function signed(value) {
   if (value === 0) return "0";
   return `${value > 0 ? "+" : "−"}${Math.abs(value)}`;
 }
 
-function render() {
-  const city = cityData[citySelect.value];
-  const firstForecast = city.forecasts[0].value;
-  const difference = city.actual - firstForecast;
-  const orderedForecasts = [...city.forecasts].sort((a, b) =>
-    sortDescending ? b.value - a.value : a.value - b.value,
-  );
-
-  document.querySelector("#dashboard-title").textContent = city.title;
-  document.querySelector("[data-stat='forecast']").textContent = firstForecast;
-  document.querySelector("[data-stat='actual']").textContent = city.actual;
-  document.querySelector("[data-stat='difference']").textContent = signed(difference);
-  document.querySelector("[data-stat='accuracy']").textContent = city.accuracy;
-  document.querySelector("[data-actual-label]").textContent = `${city.actual}°C`;
-
-  tableBody.replaceChildren(
-    ...orderedForecasts.map((item) => {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${item.date}</td>
-        <td>${item.days} ${item.days === 1 ? "день" : "днів"}</td>
-        <td><strong>${item.value}°C</strong></td>
-        <td>${city.actual}°C</td>
-        <td><span class="difference-pill">${signed(city.actual - item.value)}°</span></td>
-      `;
-      return row;
-    }),
-  );
-
-  const min = Math.min(city.actual - 1, ...city.forecasts.map(({ value }) => value));
-  const max = Math.max(...city.forecasts.map(({ value }) => value));
-  const scale = (value) => 55 + ((value - min) / Math.max(max - min, 1)) * 105;
-  chart.style.setProperty("--actual-line", `${34 + scale(city.actual)}px`);
-  chart.replaceChildren(
-    ...city.forecasts.map((item) => {
-      const column = document.createElement("div");
-      column.className = "chart__column";
-      column.style.setProperty("--height", `${scale(item.value)}px`);
-      column.innerHTML = `<span class="chart__value">${item.value}°</span><span class="chart__label">−${item.days} дн.</span>`;
-      return column;
-    }),
-  );
+function formatDate(value) {
+  return new Date(`${value}T12:00:00Z`).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
 }
 
-citySelect.addEventListener("change", render);
+function setText(selector, value) {
+  const node = document.querySelector(selector);
+  if (node) node.textContent = value;
+}
+
+function renderChart(values, labels, actual = null) {
+  if (!values.length) { chart.replaceChildren(); return; }
+  const finite = values.filter((value) => Number.isFinite(value));
+  const min = Math.min(...finite, ...(actual == null ? [] : [actual]));
+  const max = Math.max(...finite, ...(actual == null ? [] : [actual]));
+  const scale = (value) => 55 + ((value - min) / Math.max(max - min, 1)) * 105;
+  if (actual != null) chart.style.setProperty("--actual-line", `${34 + scale(actual)}px`);
+  chart.replaceChildren(...values.map((value, index) => {
+    const column = document.createElement("div");
+    column.className = "chart__column";
+    column.style.setProperty("--height", `${scale(value)}px`);
+    column.innerHTML = `<span class="chart__value">${value}°</span><span class="chart__label">${labels[index]}</span>`;
+    return column;
+  }));
+}
+
+function renderRows(rows, actual = null) {
+  const ordered = [...rows].sort((a, b) => sortDescending ? b.value - a.value : a.value - b.value);
+  tableBody.replaceChildren(...ordered.map((item) => {
+    const row = document.createElement("tr");
+    const valueText = Number.isFinite(item.value) ? `${item.value}°C` : "—";
+    const actualText = actual == null ? "—" : `${actual}°C`;
+    const difference = actual == null || !Number.isFinite(item.value) ? "—" : `${signed(actual - item.value)}°`;
+    row.innerHTML = `<td>${item.date}</td><td>${item.days ? `${item.days} дн.` : "—"}</td><td><strong>${valueText}</strong></td><td>${actualText}</td><td><span class="difference-pill">${difference}</span></td>`;
+    return row;
+  }));
+}
+
+function renderDemo() {
+  citySelect.replaceChildren(
+    new Option("Київ, Україна", "kyiv"),
+    new Option("Львів, Україна", "lviv"),
+  );
+  const city = demoCityData[citySelect.value] ?? demoCityData.kyiv;
+  const rows = city.forecasts.map((value, index) => ({ date: `${index + 1} серпня`, days: 7 - index, value }));
+  const first = rows[0].value;
+  modeLabel.textContent = "Демонстраційні дані";
+  setText("[data-data-note]", "Дані на екрані демонстраційні");
+  setText(".stat-card--actual p", "Було насправді");
+  setText(".stat-card--actual .stat-card__note", "фактичний максимум");
+  setText(".stat-card--difference p", "Помилка прогнозу");
+  setText(".stat-card--difference .stat-card__note", "прогноз був завищений");
+  setText(".stat-card--score p", "Точність за 7 днів");
+  setText(".stat-card--score .stat-card__note", "за останні 30 днів");
+  dashboardState.hidden = true;
+  setText("#dashboard-title", city.title);
+  setText("[data-stat='forecast']", first);
+  setText("[data-stat='actual']", city.actual);
+  setText("[data-stat='difference']", signed(city.actual - first));
+  setText("[data-stat='accuracy']", city.accuracy);
+  setText("[data-actual-label]", `${city.actual}°C`);
+  renderRows(rows, city.actual);
+  renderChart(rows.map(({ value }) => value), rows.map(({ days }) => `−${days} дн.`), city.actual);
+}
+
+function renderRealEmpty(message) {
+  modeLabel.textContent = "Реальні дані";
+  setText("[data-data-note]", "Дані завантажені з вашої колекції прогнозів");
+  setText(".stat-card--actual p", "Фактична погода");
+  setText(".stat-card--actual .stat-card__note", "спостереження — наступний етап");
+  setText(".stat-card--difference p", "Помилка прогнозу");
+  setText(".stat-card--difference .stat-card__note", "потрібні фактичні спостереження");
+  setText(".stat-card--score p", "Точність");
+  setText(".stat-card--score .stat-card__note", "після накопичення даних");
+  dashboardState.textContent = message;
+  dashboardState.hidden = false;
+  tableBody.replaceChildren();
+  chart.replaceChildren();
+  ["forecast", "actual", "difference", "accuracy"].forEach((key) => setText(`[data-stat='${key}']`, "—"));
+  setText("[data-actual-label]", "Фактичні дані з’являться на наступному етапі");
+}
+
+function renderReal() {
+  if (!realLocations.length) return renderRealEmpty("Додайте активне місто, щоб почати збирати реальні прогнози.");
+  const selected = realLocations.find(({ id }) => id === citySelect.value) ?? realLocations[0];
+  citySelect.value = selected.id;
+  const rows = realForecasts.filter(({ locationId }) => locationId === selected.id);
+  if (!rows.length) return renderRealEmpty("Для цієї локації ще немає зібраних прогнозів.");
+  dashboardState.hidden = true;
+  modeLabel.textContent = "Реальні дані · прогноз";
+  setText("[data-data-note]", "Дані завантажені з вашої колекції прогнозів");
+  setText(".stat-card--actual p", "Фактична погода");
+  setText(".stat-card--actual .stat-card__note", "спостереження — наступний етап");
+  setText(".stat-card--difference p", "Помилка прогнозу");
+  setText(".stat-card--difference .stat-card__note", "потрібні фактичні спостереження");
+  setText(".stat-card--score p", "Точність");
+  setText(".stat-card--score .stat-card__note", "після накопичення даних");
+  const latestCollection = rows.reduce((latest, row) => !latest || row.collectedAt > latest.collectedAt ? row : latest, null);
+  const latestRows = rows.filter(({ collectedAt }) => collectedAt === latestCollection.collectedAt);
+  const values = latestRows.map(({ temperatureMax }) => temperatureMax).filter(Number.isFinite);
+  const labels = latestRows.map(({ targetDate }) => formatDate(targetDate));
+  const first = values[0];
+  setText("#dashboard-title", `${selected.name} · прогноз`);
+  setText("[data-stat='forecast']", Number.isFinite(first) ? first : "—");
+  setText("[data-stat='actual']", "—");
+  setText("[data-stat='difference']", "—");
+  setText("[data-stat='accuracy']", "—");
+  setText("[data-actual-label]", "Фактична погода — наступний етап");
+  renderRows(latestRows.map(({ targetDate, temperatureMax }) => ({ date: formatDate(targetDate), value: temperatureMax, days: null })));
+  renderChart(values, labels);
+}
+
+async function loadRealData() {
+  const version = ++loadVersion;
+  if (!currentSession) return renderDemo();
+  dashboardState.textContent = "Завантажуємо реальні прогнози…";
+  dashboardState.hidden = false;
+  try {
+    realLocations = (await getUserLocations()).filter(({ isActive }) => isActive);
+    if (version !== loadVersion || !currentSession) return;
+    citySelect.replaceChildren(...realLocations.map(({ id, name }) => new Option(name, id)));
+    realForecasts = await getUserForecasts(realLocations.map(({ id }) => id));
+    if (version !== loadVersion || !currentSession) return;
+    renderReal();
+  } catch {
+    renderRealEmpty("Не вдалося завантажити реальні прогнози. Спробуйте ще раз.");
+  }
+}
+
+citySelect.addEventListener("change", () => currentSession ? renderReal() : renderDemo());
 sortButton.addEventListener("click", () => {
   sortDescending = !sortDescending;
   sortButton.closest("th").setAttribute("aria-sort", sortDescending ? "descending" : "ascending");
-  render();
+  currentSession ? renderReal() : renderDemo();
 });
 
-render();
 initializeConnectionStatus();
 const locationsUI = initializeLocationsUI();
-initializeDashboardAuth({ onSessionChange: (session) => locationsUI.setSession(session) });
+initializeDashboardAuth({
+  onSessionChange: (session) => {
+    currentSession = session;
+    locationsUI.setSession(session);
+    loadRealData();
+  },
+});
