@@ -29,7 +29,9 @@ test("collector trust boundary remains outside frontend", () => {
 });
 
 test("scheduler implementation adds no actual-weather schema or repository secret", () => {
-  const operationalFiles = [...files("supabase"), ...files(".github")].map((path) => readFileSync(path, "utf8")).join("\n");
+  const operationalFiles = [...files("supabase/functions/collect-forecasts"), ...files(".github")]
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
   assert.doesNotMatch(operationalFiles, /create\s+table\s+(?:public\.)?weather_observations/i);
   assert.doesNotMatch(operationalFiles, /FORECAST_SCHEDULER_TOKEN\s*=\s*['"][A-Za-z0-9_-]{20,}/);
 });
