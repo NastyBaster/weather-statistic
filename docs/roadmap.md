@@ -27,7 +27,7 @@ deploy, invoke, or operate them.
 | 5.1.1 | Authorized production rollout and validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
-| **5.2.1** | **Repository hardening and authorized development validation complete. Development is at 6/6 migrations with the reviewed function deployed; negative transport checks, one scheduled enqueue, terminal evidence, and disabled-scheduler verification passed. The scheduler remains disabled and production is unchanged.** | **Complete** |
+| **5.2.1** | **Repository hardening is merged and the authorized development smoke is complete. The full validation matrix still requires authenticated non-admin/manual paths, duplicate and concurrent calls, timeout/failure behavior, no-active-location, RLS/immutability, and complete disable evidence.** | **In progress** |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | Planned |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Planned |
 | 7.0 | Observation provider contract and immutable observation schema | Planned |
@@ -57,11 +57,12 @@ These items do not block the core weather pipeline and require separate bounded 
 - global geocoding (formerly Stage 4.2);
 - canonical places shared across users.
 
-The scheduler contract and repository hardening are merged to `main`, and local plus authorized
-development validation is complete. No development Cron job is configured or enabled; the one-off
-manual enqueue produced sanitized terminal evidence and no active run. Production scheduling is
-unchanged and requires a separate approved operational stage. Observations, accuracy, geocoding,
-and other future functionality remain deferred.
+The scheduler contract and repository hardening are merged to `main`; the authorized development
+smoke is complete, but Stage 5.2.1 remains in progress until the full matrix is evidenced. No
+development Cron job is configured or enabled; the one-off manual enqueue produced sanitized
+terminal evidence and no active run. Production scheduling is unchanged and requires a separate
+approved operational stage. Observations, accuracy, geocoding, and other future functionality
+remain deferred.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.

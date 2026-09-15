@@ -19,7 +19,6 @@ procedures and raw evidence out of this file.
 | 5.1.1 | Production collector rollout and sanitized validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
-| 5.2.1 | Scheduler hardening and authorized development validation | Complete |
 
 Google OAuth is configured and working in development and production.
 
@@ -41,11 +40,12 @@ and the real-data dashboard remain deferred. Global geocoding is optional and de
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
 The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
-Stage 5.2.1 repository hardening and the authorized development gate are complete: the development
-ledger is 6/6, the reviewed function is deployed, four negative transport checks returned the
-expected 405/401 categories, and one manual scheduled enqueue produced one succeeded run for 14
-locations and 112 snapshots with zero duplicates and zero active runs. No Cron job was configured;
-the one-off delivery was followed by read-only evidence and the scheduler remains disabled.
+Stage 5.2.1 repository hardening is merged and the authorized development smoke is complete, but
+the full validation matrix remains open. The smoke verified the 6/6 development ledger, reviewed
+function deployment, four negative transport checks, one succeeded scheduled run for 14 locations
+and 112 snapshots, zero duplicates, and zero active runs. No Cron job was configured; the scheduler
+remains disabled until the remaining authenticated, concurrency, failure, RLS, and disable cases
+are evidenced.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.

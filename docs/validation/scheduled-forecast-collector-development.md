@@ -2,11 +2,12 @@
 
 **Stage:** 5.2.1  
 **Repository implementation date:** 2026-08-23  
-**Remote development validation:** Complete for the authorized one-off development smoke; scheduler remains disabled
+**Remote development validation:** Authorized one-off smoke complete; full Stage 5.2.1 matrix remains pending
 
 This record is intentionally sanitized. The authorized development smoke proved the remote
 migration ledger, function deployment, secret-name contract, negative transport boundary, one-off
-enqueue, terminal evidence, and disabled-scheduler state. Production was not accessed or changed.
+enqueue, terminal evidence, and disabled-scheduler state. It does not substitute for the complete
+Stage 5.2.1 matrix. Production was not accessed or changed.
 
 ## Implemented repository controls
 
@@ -170,8 +171,8 @@ were not required for the remote smoke. Production was not accessed or changed.
 - Failed, skipped, and not-run database cases: 0.
 - Node and Deno checks passed.
 - The local stack was stopped after validation.
-- Remote development validation completed on 2026-09-15; the scheduler is not enabled and
-  production is unchanged.
+- The authorized smoke completed on 2026-09-15; the scheduler is not enabled and production is
+  unchanged. The full remote matrix remains pending.
 
 ## Development schema status (2026-08-25)
 
@@ -181,7 +182,9 @@ were not required for the remote smoke. Production was not accessed or changed.
 - The reviewed `collect-forecasts` Edge Function is deployed in development and the managed
   scheduler secret name is present. Vault plaintext was never selected.
 - No Cron job is configured. One authorized `pg_net` enqueue produced one succeeded scheduled run
-  for 14 locations and 112 snapshots; no duplicate identities or active runs were present.
+  for 14 locations and 112 snapshots; no duplicate identities or active runs were present. The
+  remaining authenticated, manual, concurrency, failure, no-active-location, RLS/immutability,
+  and complete disable cases are not yet evidenced remotely.
 - Production remains unchanged.
 
 ## Development execution gate
@@ -200,8 +203,9 @@ sanitized response/log review. Capture only categories, UTC windows, and aggrega
 
 Before scheduler enablement, the local database suite and all Deno checks must pass, then the
 reviewed migrations and function must be validated against an explicitly confirmed development
-target. The complete authorized remote smoke, bounded transport evidence, and disabled-scheduler
-verification are recorded above. Repository tests alone do not substitute for this evidence.
+target. The authorized remote smoke and bounded transport evidence are recorded above; the full
+matrix and complete disable/no-later-delivery evidence remain required. Repository tests alone do
+not substitute for this evidence.
 
 At the end of validation, disable or unschedule the development job and verify that no later
 delivery occurs. Do not configure or enable production without a separately confirmed production
