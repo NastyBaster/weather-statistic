@@ -22,6 +22,7 @@ procedures and raw evidence out of this file.
 | 5.3 | Operational observability for collection health and failures without sensitive logs | In progress |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Complete |
 | 7.0 | Observation provider contract and immutable observation schema | Complete |
+| 7.1 | Manual observation collector with authorization, idempotency, and validation | Complete |
 
 Google OAuth is configured and working in development and production.
 
@@ -66,8 +67,11 @@ forecast history and honest empty/loading/error states. Actual-weather observati
 deferred to Stages 7–9.
 
 Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
-schema with zero rows; no observation collector or production migration has been run. Provider
-collection, scheduling, and accuracy remain deferred to Stages 7.1, 7.2, and 8.
+schema; provider collection, scheduling, and accuracy remain separate stages.
+
+Stage 7.1 is complete in development. The allowlisted manual collector accepted the previous
+local day for three active locations and inserted three observations with zero failures. The
+collector is deployed only to development; production deployment and invocation remain deferred.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
