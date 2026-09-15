@@ -51,10 +51,11 @@ parallel manual calls, the zero-active-location path, a partial provider failure
 boundaries, duplicate identity checks, and final disabled-scheduler state. The development
 scheduler remains disabled; production scheduling is still a separate approved operational stage.
 
-Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC in `main` and applied
-to development. It returns only scheduled-run freshness, terminal counters, running-age, and
-missing-window signals. Explicit browser-role revocation was verified on the hosted development
-project. Production migration and operational polling remain pending.
+Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC and a machine-token
+`forecast-health-monitor` Edge Function in `main`. Development has the monitor deployed with
+Supabase-managed Telegram secrets; a real Telegram delivery test passed, and scheduler expectation
+is disabled to avoid false alerts. Production migration is complete, but production monitor
+deployment, secrets, and regular polling remain pending.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
