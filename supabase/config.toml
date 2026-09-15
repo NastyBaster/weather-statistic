@@ -1,2 +1,5 @@
 [functions.collect-forecasts]
 verify_jwt = false
+
+[functions.forecast-health]
+verify_jwt = false

@@ -1,0 +1,27 @@
+.admin-main {
+  width: min(var(--content-width), calc(100% - 2 * var(--page-gutter)));
+  margin: 0 auto;
+  padding: 76px 0 96px;
+}
+
+.admin-intro { max-width: 720px; }
+.admin-intro h1 { margin: 10px 0 16px; font-size: clamp(2.5rem, 6vw, 5rem); }
+.admin-intro p:not(.eyebrow):not(.admin-updated) { color: var(--muted); font-size: 1.1rem; line-height: 1.6; }
+.admin-updated { color: var(--muted); font-size: .9rem; }
+.admin-alert { margin: 28px 0; padding: 16px 18px; border: 1px solid #e3a08f; background: #fff1eb; color: #7d3021; }
+.health-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 44px 0 28px; }
+.health-card { min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: 22px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); }
+.health-card strong { font-size: 2rem; font-weight: 600; }
+.health-card span:last-child { color: var(--muted); font-size: .9rem; }
+.health-label { color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; }
+.health-card--status strong { color: var(--green); }
+.admin-refresh { margin-top: 8px; }
+
+@media (max-width: 800px) {
+  .admin-main { width: min(100% - 32px, var(--content-width)); padding-top: 44px; }
+  .health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .health-grid { grid-template-columns: 1fr; }
+}
