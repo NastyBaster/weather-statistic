@@ -20,7 +20,7 @@ procedures and raw evidence out of this file.
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
 | 5.3 | Operational observability for collection health and failures without sensitive logs | In progress |
-| 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | In progress |
+| 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Complete |
 
 Google OAuth is configured and working in development and production.
 
@@ -57,9 +57,10 @@ Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC and a
 deployed with Supabase-managed Telegram secrets; GitHub Actions polls production every 15 minutes,
 and real Telegram delivery tests passed. Production's first scheduled acceptance remains pending.
 
-Stage 6 is now deployed to the frontend. Guests retain an explicitly labeled demo view; authenticated
-users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest forecast
-history and honest empty/loading/error states; actual-weather observations and accuracy remain deferred.
+Stage 6 is complete and deployed to the frontend. Guests retain an explicitly labeled demo view;
+authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
+forecast history and honest empty/loading/error states. Actual-weather observations and accuracy remain
+deferred to Stages 7–9.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
