@@ -30,7 +30,8 @@ Google OAuth is configured and working in development and production.
 - **Production:** Cloudflare Pages serves the merged `main` deployment. On 2026-09-15 the
   explicitly authorized production database reset removed disposable data and replayed all six
   repository migrations. The reviewed `collect-forecasts` function was redeployed; the scheduler
-  remains disabled.
+  remains protected by the reviewed scheduler rollout; the production Cron job is now active at
+  04:17 UTC and the first scheduled acceptance is pending.
 - **Production reset baseline:** `profiles`, `locations`, `forecast_runs`, and
   `forecast_snapshots` are present, protected by RLS, and contain zero rows after the reset.
   Production has no `pg_cron` or `pg_net` scheduler extensions enabled. Historical production
@@ -52,10 +53,9 @@ boundaries, duplicate identity checks, and final disabled-scheduler state. The d
 scheduler remains disabled; production scheduling is still a separate approved operational stage.
 
 Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC and a machine-token
-`forecast-health-monitor` Edge Function in `main`. Development has the monitor deployed with
-Supabase-managed Telegram secrets; a real Telegram delivery test passed, and scheduler expectation
-is disabled to avoid false alerts. Production migration is complete, but production monitor
-deployment, secrets, and regular polling remain pending.
+`forecast-health-monitor` Edge Function in `main`. Development and production have the monitor
+deployed with Supabase-managed Telegram secrets; GitHub Actions polls production every 15 minutes,
+and real Telegram delivery tests passed. Production's first scheduled acceptance remains pending.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
