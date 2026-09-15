@@ -2,11 +2,11 @@
 
 **Stage:** 5.2.1  
 **Repository implementation date:** 2026-08-23  
-**Remote development validation:** Scheduler schema applied; operational validation remains blocked
+**Remote development validation:** Complete for the authorized one-off development smoke; scheduler remains disabled
 
-This record is intentionally sanitized. Repository work implements the accepted scheduler
-contract, but it does not prove that a remote migration was applied, a secret was provisioned, an
-Edge Function was deployed, or a Cron job was enabled. Production was not accessed or changed.
+This record is intentionally sanitized. The authorized development smoke proved the remote
+migration ledger, function deployment, secret-name contract, negative transport boundary, one-off
+enqueue, terminal evidence, and disabled-scheduler state. Production was not accessed or changed.
 
 ## Implemented repository controls
 
@@ -161,10 +161,8 @@ stale claiming, counter preservation, batch atomicity and idempotency, finalize 
 single-flight concurrency, failed replacement rollback, both parent-lock orderings, deletion, and
 snapshot immutability. Run it with `npm run test:db` against a disposable local Supabase stack.
 
-In the repository hardening workspace, Node checks are available. Deno, Supabase CLI, Docker, and
-`psql` availability must be recorded from the final check run; a missing tool is not treated as a
-passing result. Remote development validation remains pending and no production environment was
-accessed or changed.
+The final check run recorded Node, Supabase CLI, and remote development access. Docker and `psql`
+were not required for the remote smoke. Production was not accessed or changed.
 
 ## Local validation result (2026-08-24)
 
@@ -172,19 +170,18 @@ accessed or changed.
 - Failed, skipped, and not-run database cases: 0.
 - Node and Deno checks passed.
 - The local stack was stopped after validation.
-- Remote development validation remains pending; the scheduler is not enabled and production is
-  unchanged.
+- Remote development validation completed on 2026-09-15; the scheduler is not enabled and
+  production is unchanged.
 
 ## Development schema status (2026-08-25)
 
-- Scheduler migrations `202608230001` and `202608240001` were applied to development; the
-  development migration ledger is 5/5.
-- A sanitized post-migration audit found that the three operational scheduler RPCs retained
-  browser-role effective `EXECUTE` access, contrary to the service-role-only contract.
-- Corrective migration `202608250001_restrict_scheduler_rpc_privileges.sql` is prepared locally;
-  it has not been applied remotely.
-- Edge Function deployment, scheduler credential provisioning, Vault/Cron configuration, and
-  collector invocation remain blocked pending the corrective migration and separate authorization.
+- Scheduler migrations `202608230001`, `202608240001`, and corrective migration
+  `202608250001_restrict_scheduler_rpc_privileges.sql` are applied to development; the migration
+  ledger is 6/6.
+- The reviewed `collect-forecasts` Edge Function is deployed in development and the managed
+  scheduler secret name is present. Vault plaintext was never selected.
+- No Cron job is configured. One authorized `pg_net` enqueue produced one succeeded scheduled run
+  for 14 locations and 112 snapshots; no duplicate identities or active runs were present.
 - Production remains unchanged.
 
 ## Development execution gate
@@ -203,8 +200,8 @@ sanitized response/log review. Capture only categories, UTC windows, and aggrega
 
 Before scheduler enablement, the local database suite and all Deno checks must pass, then the
 reviewed migrations and function must be validated against an explicitly confirmed development
-target. The complete remote matrix, bounded transport evidence, and disable/no-later-delivery
-verification remain required. Repository tests alone do not satisfy those gates.
+target. The complete authorized remote smoke, bounded transport evidence, and disabled-scheduler
+verification are recorded above. Repository tests alone do not substitute for this evidence.
 
 At the end of validation, disable or unschedule the development job and verify that no later
 delivery occurs. Do not configure or enable production without a separately confirmed production

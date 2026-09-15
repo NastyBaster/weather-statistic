@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-09-15
 
 This is the concise, sanitized continuity record. Update it when a stage merges; keep detailed
 procedures and raw evidence out of this file.
@@ -19,16 +19,16 @@ procedures and raw evidence out of this file.
 | 5.1.1 | Production collector rollout and sanitized validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
+| 5.2.1 | Scheduler hardening and authorized development validation | Complete |
 
 Google OAuth is configured and working in development and production.
 
 ## Current environments
 
-- **Development:** authentication, profiles, personal locations, forecast schema, and the manual
-  collector have been validated.
-- **Production:** authentication, Google OAuth, personal locations, and the applied forecast
-  schema are active. The `collect-forecasts` Edge Function is deployed with JWT verification and
-  was validated as a manual-only, server-side operation.
+- **Development:** authentication, profiles, personal locations, forecast schema, manual
+  collection, and the hardened scheduler path have been validated. The scheduler remains disabled.
+- **Production:** Cloudflare Pages serves the merged `main` deployment. No production scheduler
+  or migration operation was performed during this validation.
 - **Sanitized collector baseline:** 2 terminal successful manual runs, 0 running runs, 24
   snapshots, and 0 duplicate identities. The first run created 24 snapshots and the same-local-date
   second run created 0. RLS, immutability, and sanitized log review passed.
@@ -41,15 +41,11 @@ and the real-data dashboard remain deferred. Global geocoding is optional and de
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
 The contract requires a single-flight scheduled run and preserves the manual operator JWT path.
-Stage 5.2.1 repository hardening merged to `main` through PR #13: machine/manual authentication,
-strict request validation, database-enforced scheduled claiming/stale recovery, the snapshot
-parent write fence, transactional finalize fencing, and bounded deadline controls are available
-for the next gate. Local PostgreSQL validation is complete: 21 pgTAP assertions and 14
-concurrency cases passed, with 0 failed, skipped, or not-run cases; Node 40/40 and Deno 39/39
-also passed. Remote development migration, deployment, validation, and disable verification
-remain pending. The development scheduler is not enabled, production is unchanged, and Stage
-5.2.1 remains in progress. Production rollout still requires a separately confirmed target and
-explicit authorization.
+Stage 5.2.1 repository hardening and the authorized development gate are complete: the development
+ledger is 6/6, the reviewed function is deployed, four negative transport checks returned the
+expected 405/401 categories, and one manual scheduled enqueue produced one succeeded run for 14
+locations and 112 snapshots with zero duplicates and zero active runs. No Cron job was configured;
+the one-off delivery was followed by read-only evidence and the scheduler remains disabled.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
@@ -61,8 +57,7 @@ selections, beginning with Ukrainian regional capitals. District centres require
 capacity, and storage validation. The archive could let users see already collected history
 immediately; longer-term observed-weather history may be considered separately.
 
-This is not an approved implementation stage and must not delay the current core path. Stage 5.2.1
-continues against active personal locations as already planned.
+This is not an approved implementation stage and must not delay the current core path.
 
 ## Working model
 
