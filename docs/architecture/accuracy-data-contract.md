@@ -1,6 +1,6 @@
 # Accuracy data contract (Stage 8.0)
 
-Status: **proposed for Stage 8.0 review** (2026-09-15).
+Status: **accepted for Stage 8.0 implementation** (2026-09-15).
 
 This contract defines how immutable forecast snapshots are paired with immutable weather
 observations and how accuracy is described. It does not add a database object, collect data,
