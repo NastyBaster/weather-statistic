@@ -31,8 +31,8 @@ deploy, invoke, or operate them.
 | **5.3** | **Operational observability for collection health and failures without sensitive logs. The service-role health RPC and machine-token Telegram monitor are merged and validated in development; production rollout and regular polling remain pending.** | **In progress** |
 | **6** | **Forecast history backed by real snapshots with an explicit demo/real boundary. Authenticated users read their RLS-scoped snapshots; observation-based actuals and accuracy remain deferred.** | **Complete** |
 | **7.0** | **Observation provider contract and immutable observation schema. Development migration is applied and RLS/immutability boundaries are validated; collection remains deferred.** | **Complete** |
-| **7.1** | **Manual observation collector with authorization, idempotency, and validation. Development deployment and authenticated smoke acceptance completed; production remains deferred.** | **Complete** |
-| 7.2 | Scheduled observations using a separately approved operational contract | Planned |
+| **7.1** | **Manual observation collector with authorization, idempotency, and validation. Development deployment and authenticated smoke acceptance completed; the reviewed function is also deployed in production.** | **Complete** |
+| **7.2** | **Scheduled observations using a separate opaque machine token, Vault/Edge secret storage, and a daily production Cron job. Scheduled smoke acceptance completed; first automatic Cron acceptance remains pending.** | **In progress** |
 | 8.0 | Accuracy contract, including sample-size rules and explicit precipitation-event metrics | Planned |
 | 8.1 | Accuracy read model implementing the approved contract | Planned |
 | 9 | Real-data dashboard with honest loading, missing-data, and provenance states | Planned |
@@ -58,12 +58,11 @@ These items do not block the core weather pipeline and require separate bounded 
 - canonical places shared across users.
 
 The scheduler contract and repository hardening are merged to `main`; the authorized development
-validation matrix is complete. No development Cron job is configured or enabled; remote manual
-evidence finished with no active runs and no duplicate identities. On 2026-09-15 the explicitly
-authorized production reset replayed all six repository migrations and redeployed the reviewed
-collector with an empty data baseline. Production scheduling remains disabled and requires a
-separate approved operational stage. Observations, accuracy, geocoding, and other future
-functionality remain deferred.
+validation matrix is complete. On 2026-09-15 the explicitly authorized production reset replayed
+all seven repository migrations and redeployed the reviewed forecast and observation collectors.
+The production observation Cron job is active at 04:47 UTC; its scheduled smoke path succeeded
+with sanitized evidence and no duplicate identity was introduced. First automatic Cron acceptance
+remains pending. Observations, accuracy, geocoding, and other future functionality remain deferred.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.

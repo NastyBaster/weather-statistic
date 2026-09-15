@@ -23,6 +23,7 @@ procedures and raw evidence out of this file.
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Complete |
 | 7.0 | Observation provider contract and immutable observation schema | Complete |
 | 7.1 | Manual observation collector with authorization, idempotency, and validation | Complete |
+| 7.2 | Scheduled observation collector and production Cron rollout | In progress |
 
 Google OAuth is configured and working in development and production.
 
@@ -30,14 +31,14 @@ Google OAuth is configured and working in development and production.
 
 - **Development:** authentication, profiles, personal locations, forecast schema, manual
   collection, hardened scheduler path, and the observation schema have been validated. The
-  scheduler remains disabled.
+  observation function accepts a dedicated machine token; pg_cron is not enabled in this project.
 - **Production:** Cloudflare Pages serves the merged `main` deployment. On 2026-09-15 the
-  explicitly authorized production database reset removed disposable data and replayed all six
-  repository migrations. The reviewed `collect-forecasts` function was redeployed; the scheduler
-  is configured with the reviewed daily Cron job; first automatic Cron acceptance remains pending.
+  explicitly authorized production database reset removed disposable data and replayed all seven
+  repository migrations. The reviewed forecast and observation functions were redeployed; the
+  observation scheduler is configured with a dedicated Vault/Edge secret and daily Cron job.
 - **Production reset baseline:** `profiles`, `locations`, `forecast_runs`, and
   `forecast_snapshots` are present, protected by RLS, and contain zero rows after the reset.
-  Production has no `pg_cron` or `pg_net` scheduler extensions enabled. Historical production
+  Historical production
   rows are not recoverable from the reset itself and would require a Supabase backup/export.
 
 There is no production UI trigger. Personal locations are real when users add
@@ -69,9 +70,14 @@ deferred to Stages 7–9.
 Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
 schema; provider collection, scheduling, and accuracy remain separate stages.
 
-Stage 7.1 is complete in development. The allowlisted manual collector accepted the previous
-local day for three active locations and inserted three observations with zero failures. The
-collector is deployed only to development; production deployment and invocation remain deferred.
+Stage 7.1 is complete. The allowlisted manual collector accepted the previous local day for three
+active locations and inserted three observations with zero failures in development. The same
+reviewed function is deployed in production.
+
+Stage 7.2 is in progress. Production uses a separate opaque scheduler token stored only in Vault
+and the managed Edge secret store, with `forecast-observation-daily` scheduled for 04:47 UTC.
+The authorized scheduled smoke acceptance succeeded for three locations with zero failures and
+three inserted observations; first automatic Cron acceptance remains pending.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
