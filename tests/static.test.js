@@ -25,6 +25,13 @@ test("authentication pages load configuration before their modules", async () =>
   }
 });
 
+test("admin health page loads configuration before its module", async () => {
+  const html = await readFile(new URL("admin.html", root), "utf8");
+  assert.ok(html.indexOf('src="runtime-config.js"') < html.indexOf('src="js/admin.js"'));
+  assert.match(html, /data-health/);
+  await readFile(new URL("js/admin.js", root), "utf8");
+});
+
 test("dashboard stays public while authentication supports the complete email flow", async () => {
   const html = await readFile(new URL("index.html", root), "utf8");
   const auth = await readFile(new URL("js/auth.js", root), "utf8");
@@ -114,6 +121,7 @@ test("stylesheet entry point references existing CSS modules", async () => {
     "components.css",
     "pages/dashboard.css",
     "pages/auth.css",
+    "pages/admin.css",
     "responsive.css",
   ]);
   await Promise.all(imports.map((path) => readFile(new URL(`css/${path}`, root), "utf8")));
@@ -121,7 +129,7 @@ test("stylesheet entry point references existing CSS modules", async () => {
 
 test("build includes every application page", async () => {
   const build = await readFile(new URL("scripts/build.mjs", root), "utf8");
-  assert.match(build, /"index\.html", "login\.html", "reset-password\.html"/);
+  assert.match(build, /"index\.html", "admin\.html", "login\.html", "reset-password\.html"/);
 });
 
 test("production build copies the complete JavaScript module directory", async () => {
