@@ -47,7 +47,8 @@ capacity, and storage validation. The archive could let users see already collec
 immediately; longer-term observed-weather history may be considered separately.
 
 This is not an approved implementation stage and must not delay the current core path. Stage 5.2.1
-continues against active personal locations as already planned.
+continues against active personal locations as already planned. Product discovery notes are recorded
+in `docs/product-direction-backlog.md` and are not authorization to implement.
 
 ## Optional backlog
 
@@ -66,9 +67,10 @@ the 04:47 UTC observation run inserted three observations for the previous local
 failures. Observations are now being collected, while accuracy, geocoding, and the real-data
 dashboard remain deferred to later stages.
 
-Stages 8.0/8.1 accuracy work merged to `main` in PR #59 on 2026-09-16. Its migrations are
-applied in development but not production; production schema changes remain a separately
-authorized operation. Stage 9 merged to `main` in PR #62 on 2026-09-16.
+Stages 8.0/8.1 accuracy work merged to `main` in PR #59 on 2026-09-16. Its migrations were
+applied to production on 2026-09-16 after explicit authorization. Stage 9 merged to `main` in
+PR #62 on 2026-09-16. Product discovery notes are recorded separately and are not an approved
+implementation stage.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.

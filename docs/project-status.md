@@ -45,10 +45,9 @@ Google OAuth is configured and working in development and production.
   observation tables; historical rows removed by the reset are not recoverable from the reset itself
   and would require a Supabase backup/export.
 
-There is no production UI trigger. Personal locations are real when users add
-them, but the accuracy read model migrations are not yet applied to production and the real-data
-dashboard is still under implementation. Never mix demo and real data without an explicit, visible
-boundary. Global geocoding is optional and deferred.
+There is no production UI trigger. Personal locations are real when users add them, and the
+accuracy read model migrations are applied to production. Never mix demo and real data without an
+explicit, visible boundary. Global geocoding is optional and deferred.
 
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
@@ -69,7 +68,7 @@ Stage 6 is complete and deployed to the frontend. Guests retain an explicitly la
 authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
 forecast history and honest empty/loading/error states. Actual-weather observations are collected;
 the accuracy read model and real-data dashboard integration are complete in `main`; production
-accuracy migrations remain a separately authorized operation.
+accuracy migrations were applied after explicit authorization on 2026-09-16.
 
 Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
 schema; provider collection, scheduling, and accuracy remain separate stages.
@@ -85,15 +84,15 @@ at 04:47 UTC with no collection failure. The paired `forecast-collector-daily` r
 also succeeded for three locations, with 24 snapshots created and zero failures.
 
 Stage 8.0 and 8.1 are complete. PR #59 merged to `main` on 2026-09-16 as `b83eb99`. The
-development read model includes per-location and all-owned-location aggregates, per-metric
-coverage, scored-pair provenance ranges, row-level detail provenance, and deterministic detail
-pagination. Its migrations are not applied to production; that remains an explicitly authorized
-future operation.
+read model includes per-location and all-owned-location aggregates, per-metric coverage,
+scored-pair provenance ranges, row-level detail provenance, and deterministic detail pagination.
+The five accuracy migrations were applied to production after explicit authorization on
+2026-09-16 and the two scheduler jobs remained active.
 
 Stage 9 is complete. PR #62 merged to `main` on 2026-09-16 as `aa98c47`. The authenticated
 dashboard now connects to the real forecast and accuracy read models while retaining honest
-loading, missing-data, provenance, and sample-size states. Until production accuracy migrations
-are authorized and applied, the dashboard exposes that accuracy data is unavailable there.
+loading, missing-data, provenance, and sample-size states. Initial accuracy values remain empty
+until supported forecast horizons have matching observations.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
