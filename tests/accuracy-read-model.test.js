@@ -108,6 +108,15 @@ test("accuracy provenance refinement limits date ranges to paired observations",
   assert.match(refinementSql, /create or replace view public\.forecast_accuracy/i);
 });
 
+test("accuracy provenance refinement requires a scored metric pair", async () => {
+  const scoredSql = await readFile(new URL("../supabase/migrations/202609160004_require_scored_provenance.sql", import.meta.url), "utf8");
+  assert.match(scoredSql, /forecast_temperature_min is not null/i);
+  assert.match(scoredSql, /observed_temperature_min is not null/i);
+  assert.match(scoredSql, /forecast_precipitation_sum is not null/i);
+  assert.match(scoredSql, /precipitation_probability is not null/i);
+  assert.match(scoredSql, /create or replace view public\.forecast_accuracy/i);
+});
+
 test("accuracy read model exposes stable reasons for undefined rain ratios", () => {
   assert.match(sql, /'no_predicted_events' else null end as rain_precision_reason/i);
   assert.match(sql, /'no_actual_events' else null end as rain_recall_reason/i);
