@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createAccuracyRepository, normalizeAccuracy } from "../js/accuracy.js";
 
-const migrationName = "202609150004_create_accuracy_read_model.sql";
+const migrationName = "202609160001_extend_accuracy_read_model.sql";
 const migrationPath = new URL(`../supabase/migrations/${migrationName}`, import.meta.url);
 const sql = await readFile(migrationPath, "utf8");
 

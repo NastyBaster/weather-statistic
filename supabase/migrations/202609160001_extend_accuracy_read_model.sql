@@ -1,5 +1,7 @@
 begin;
 
+drop view public.forecast_accuracy;
+
 create view public.forecast_accuracy
 with (security_invoker = true)
 as
@@ -161,8 +163,11 @@ select
   rain_fn,
   rain_tn,
   case when rain_tp + rain_fp = 0 then null else rain_tp::double precision / (rain_tp + rain_fp) end as rain_precision,
+  case when rain_tp + rain_fp = 0 then 'no_predicted_events' else null end as rain_precision_reason,
   case when rain_tp + rain_fn = 0 then null else rain_tp::double precision / (rain_tp + rain_fn) end as rain_recall,
+  case when rain_tp + rain_fn = 0 then 'no_actual_events' else null end as rain_recall_reason,
   case when rain_fp + rain_tn = 0 then null else rain_fp::double precision / (rain_fp + rain_tn) end as rain_false_alarm_rate,
+  case when rain_fp + rain_tn = 0 then 'no_actual_non_events' else null end as rain_false_alarm_rate_reason,
   case
     when rain_event_n < 10 then 'insufficient'
     when rain_event_n < 30 then 'provisional'
