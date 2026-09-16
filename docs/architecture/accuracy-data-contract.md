@@ -88,7 +88,14 @@ Report all four counts plus:
 - `recall = TP / (TP + FN)`;
 - `false_alarm_rate = FP / (FP + TN)`.
 
-If a denominator is zero, that metric is `null` with a reason code; it is never displayed as 0%.
+If a denominator is zero, that metric is `null` with a stable reason code; it is never displayed as
+0%. The v1 read model uses these codes:
+
+| Metric | Zero-denominator reason code |
+| --- | --- |
+| Precision | `no_predicted_events` |
+| Recall | `no_actual_events` |
+| False-alarm rate | `no_actual_non_events` |
 The continuous precipitation MAE remains separate from the event metrics. A single “rain
 accuracy” percentage is not a valid result.
 

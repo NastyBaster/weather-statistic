@@ -1,6 +1,6 @@
 import { getSupabaseClient } from "./supabase-client.js";
 
-const FIELDS = "location_id,lead_days,temperature_min_n,temperature_min_mae,temperature_min_bias,temperature_min_status,temperature_max_n,temperature_max_mae,temperature_max_bias,temperature_max_status,wind_speed_max_n,wind_speed_max_mae,wind_speed_max_bias,wind_speed_max_status,precipitation_sum_n,precipitation_sum_mae,precipitation_sum_bias,precipitation_sum_status,rain_event_n,rain_tp,rain_fp,rain_fn,rain_tn,rain_precision,rain_recall,rain_false_alarm_rate,rain_event_status";
+const FIELDS = "location_id,lead_days,forecast_collection_date_min,forecast_collection_date_max,target_date_min,target_date_max,observation_providers,temperature_min_n,temperature_min_mae,temperature_min_bias,temperature_min_status,temperature_max_n,temperature_max_mae,temperature_max_bias,temperature_max_status,wind_speed_max_n,wind_speed_max_mae,wind_speed_max_bias,wind_speed_max_status,precipitation_sum_n,precipitation_sum_mae,precipitation_sum_bias,precipitation_sum_status,rain_event_n,rain_tp,rain_fp,rain_fn,rain_tn,rain_precision,rain_precision_reason,rain_recall,rain_recall_reason,rain_false_alarm_rate,rain_false_alarm_rate_reason,rain_event_status";
 const LEAD_DAYS = [1, 3, 5, 7];
 
 export class AccuracyError extends Error {
@@ -46,8 +46,11 @@ export function normalizeAccuracy(row) {
       fn: Number(row.rain_fn ?? 0),
       tn: Number(row.rain_tn ?? 0),
       precision: numberOrNull(row.rain_precision),
+      precisionReason: row.rain_precision_reason,
       recall: numberOrNull(row.rain_recall),
+      recallReason: row.rain_recall_reason,
       falseAlarmRate: numberOrNull(row.rain_false_alarm_rate),
+      falseAlarmRateReason: row.rain_false_alarm_rate_reason,
       status: row.rain_event_status,
     },
   };

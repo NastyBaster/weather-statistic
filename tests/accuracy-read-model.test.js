@@ -37,8 +37,11 @@ const row = {
   rain_fn: 1,
   rain_tn: 5,
   rain_precision: 2 / 3,
+  rain_precision_reason: null,
   rain_recall: 0.8,
+  rain_recall_reason: null,
   rain_false_alarm_rate: 0.2857142857,
+  rain_false_alarm_rate_reason: null,
   rain_event_status: "provisional",
 };
 
@@ -49,6 +52,9 @@ test("accuracy read model is a new RLS-scoped security-invoker view", () => {
   assert.match(sql, /locations\.user_id = \(select auth\.uid\(\)\)/i);
   assert.match(sql, /array_agg\(distinct observation_provider order by observation_provider\)/i);
   assert.match(sql, /min\(collection_date\) as forecast_collection_date_min/i);
+  assert.match(sql, /rain_precision_reason/);
+  assert.match(sql, /rain_recall_reason/);
+  assert.match(sql, /rain_false_alarm_rate_reason/);
   assert.match(sql, /grant select on public\.forecast_accuracy to authenticated/i);
   assert.doesNotMatch(sql, /grant select on public\.forecast_accuracy to anon/i);
 });
@@ -70,6 +76,12 @@ test("accuracy read model keeps event counts, numeric metrics, and per-metric st
   assert.match(sql, /precipitation_probability >= 50/);
   assert.match(sql, /observed_precipitation_sum >= 1/);
   assert.match(sql, /when rain_actual_events < 5 or rain_actual_non_events < 5 then 'insufficient'/i);
+});
+
+test("accuracy read model exposes stable reasons for undefined rain ratios", () => {
+  assert.match(sql, /'no_predicted_events' else null end as rain_precision_reason/i);
+  assert.match(sql, /'no_actual_events' else null end as rain_recall_reason/i);
+  assert.match(sql, /'no_actual_non_events' else null end as rain_false_alarm_rate_reason/i);
 });
 
 test("normalizes the read model without turning null metrics into zero", () => {
@@ -94,8 +106,11 @@ test("normalizes the read model without turning null metrics into zero", () => {
       fn: 1,
       tn: 5,
       precision: 2 / 3,
+      precisionReason: null,
       recall: 0.8,
+      recallReason: null,
       falseAlarmRate: 0.2857142857,
+      falseAlarmRateReason: null,
       status: "provisional",
     },
   });
@@ -120,6 +135,11 @@ test("accuracy repository requires auth, scopes locations, and requests supporte
   const result = await repository.getUserAccuracy(["location-1"]);
   assert.equal(result[0].leadDays, 3);
   assert.deepEqual(calls[0], ["from", "forecast_accuracy"]);
+  assert.match(calls[1][1], /forecast_collection_date_min/);
+  assert.match(calls[1][1], /forecast_collection_date_max/);
+  assert.match(calls[1][1], /target_date_min/);
+  assert.match(calls[1][1], /target_date_max/);
+  assert.match(calls[1][1], /observation_providers/);
   assert.deepEqual(calls[2], ["in", "location_id", ["location-1"]]);
   assert.deepEqual(calls[3], ["in", "lead_days", [1, 3, 5, 7]]);
 });
