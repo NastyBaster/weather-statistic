@@ -103,7 +103,7 @@ export function createAccuracyRepository(getClient = getSupabaseClient) {
       const { data, error } = await client
         .from("forecast_accuracy")
         .select(FIELDS)
-        .in("location_id", locationIds)
+        .or(`location_id.in.(${locationIds.join(",")}),scope_type.eq.all_owned_locations`)
         .in("lead_days", LEAD_DAYS)
         .order("lead_days", { ascending: true });
       if (error) throw new AccuracyError("Не вдалося завантажити оцінку прогнозів.", "FETCH_FAILED");
@@ -114,7 +114,7 @@ export function createAccuracyRepository(getClient = getSupabaseClient) {
       const client = await getClient();
       const { data: userData, error: userError } = await client.auth.getUser();
       if (userError || !userData.user) {
-        throw new AccuracyError("РЈРІС–Р№РґС–С‚СЊ, С‰РѕР± РїРµСЂРµРіР»СЏРґР°С‚Рё РґРµС‚Р°Р»С– РѕС†С–РЅРєРё.", "AUTH_REQUIRED");
+        throw new AccuracyError("Увійдіть, щоб переглядати деталі оцінки прогнозів.", "AUTH_REQUIRED");
       }
       const { data, error } = await client
         .from("forecast_accuracy_detail")
@@ -123,7 +123,7 @@ export function createAccuracyRepository(getClient = getSupabaseClient) {
         .in("lead_days", LEAD_DAYS)
         .order("target_date", { ascending: true })
         .order("lead_days", { ascending: true });
-      if (error) throw new AccuracyError("РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РґРµС‚Р°Р»С– РѕС†С–РЅРєРё.", "FETCH_FAILED");
+      if (error) throw new AccuracyError("Не вдалося завантажити деталі оцінки прогнозів.", "FETCH_FAILED");
       return (data ?? []).map(normalizeAccuracyDetail);
     },
   };

@@ -178,6 +178,7 @@ test("accuracy repository requires auth, scopes locations, and requests supporte
       const query = {
         select(fields) { calls.push(["select", fields]); return query; },
         in(field, values) { calls.push(["in", field, values]); return query; },
+        or(expression) { calls.push(["or", expression]); return query; },
         order(field, options) { calls.push(["order", field, options]); return query; },
         then(resolve) { return Promise.resolve({ data: [row], error: null }).then(resolve); },
       };
@@ -193,6 +194,6 @@ test("accuracy repository requires auth, scopes locations, and requests supporte
   assert.match(calls[1][1], /target_date_min/);
   assert.match(calls[1][1], /target_date_max/);
   assert.match(calls[1][1], /observation_providers/);
-  assert.deepEqual(calls[2], ["in", "location_id", ["location-1"]]);
+  assert.deepEqual(calls[2], ["or", "location_id.in.(location-1),scope_type.eq.all_owned_locations"]);
   assert.deepEqual(calls[3], ["in", "lead_days", [1, 3, 5, 7]]);
 });
