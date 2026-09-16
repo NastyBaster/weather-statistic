@@ -33,9 +33,9 @@ deploy, invoke, or operate them.
 | **7.0** | **Observation provider contract and immutable observation schema. Development migration is applied and RLS/immutability boundaries are validated; collection remains deferred.** | **Complete** |
 | **7.1** | **Manual observation collector with authorization, idempotency, and validation. Development deployment and authenticated smoke acceptance completed; the reviewed function is also deployed in production.** | **Complete** |
 | **7.2** | **Scheduled observations using a separate opaque machine token, Vault/Edge secret storage, and a daily production Cron job. Scheduled smoke acceptance and the first automatic Cron acceptance completed.** | **Complete** |
-| 8.0 | Accuracy contract, including sample-size rules and explicit precipitation-event metrics | Planned |
-| 8.1 | Accuracy read model implementing the approved contract | Planned |
-| 9 | Real-data dashboard with honest loading, missing-data, and provenance states | Planned |
+| **8.0** | **Accuracy contract, including sample-size rules and explicit precipitation-event metrics** | **Complete** |
+| **8.1** | **Accuracy read model implementing the approved contract, with coverage, scored-pair provenance, detail pagination, and RLS-scoped per-location/all-owned scopes** | **Complete** |
+| 9 | Real-data dashboard with honest loading, missing-data, and provenance states | In progress (PR #62) |
 | 10 | Charts, filters, and CSV export over the real read models | Planned |
 | 11 | Production hardening, operational review, and recovery exercises | Planned |
 
@@ -66,8 +66,9 @@ the 04:47 UTC observation run inserted three observations for the previous local
 failures. Observations are now being collected, while accuracy, geocoding, and the real-data
 dashboard remain deferred to later stages.
 
-Stage 8.0/8.1 accuracy work is currently under review in PR #59. Its migration has not been
-applied to production; production schema changes remain a separately authorized operation.
+Stages 8.0/8.1 accuracy work merged to `main` in PR #59 on 2026-09-16. Its migrations are
+applied in development but not production; production schema changes remain a separately
+authorized operation. Stage 9 is now in progress in PR #62.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.
