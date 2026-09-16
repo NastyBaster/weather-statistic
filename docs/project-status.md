@@ -68,7 +68,8 @@ passed on 2026-09-16 for both daily collectors; the configured jobs are not prod
 Stage 6 is complete and deployed to the frontend. Guests retain an explicitly labeled demo view;
 authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
 forecast history and honest empty/loading/error states. Actual-weather observations are collected;
-the accuracy read model is complete, while the production dashboard integration remains in Stage 9.
+the accuracy read model and real-data dashboard integration are complete in `main`; production
+accuracy migrations remain a separately authorized operation.
 
 Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
 schema; provider collection, scheduling, and accuracy remain separate stages.
@@ -89,9 +90,10 @@ coverage, scored-pair provenance ranges, row-level detail provenance, and determ
 pagination. Its migrations are not applied to production; that remains an explicitly authorized
 future operation.
 
-Stage 9 is in progress in PR #62. It connects the authenticated dashboard to the real forecast
-and accuracy read models while retaining honest loading, missing-data, provenance, and sample-size
-states.
+Stage 9 is complete. PR #62 merged to `main` on 2026-09-16 as `aa98c47`. The authenticated
+dashboard now connects to the real forecast and accuracy read models while retaining honest
+loading, missing-data, provenance, and sample-size states. Until production accuracy migrations
+are authorized and applied, the dashboard exposes that accuracy data is unavailable there.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
