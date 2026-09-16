@@ -1,37 +1,52 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { createAccuracyRepository, normalizeAccuracy } from "../js/accuracy.js";
+import { createAccuracyRepository, normalizeAccuracy, normalizeAccuracyDetail } from "../js/accuracy.js";
 
-const migrationName = "202609160001_extend_accuracy_read_model.sql";
+const migrationName = "202609160002_complete_accuracy_read_model.sql";
 const migrationPath = new URL(`../supabase/migrations/${migrationName}`, import.meta.url);
 const sql = await readFile(migrationPath, "utf8");
 
 const row = {
+  scope_type: "location",
   location_id: "location-1",
   lead_days: 3,
+  location_count: 1,
+  forecast_row_n: 12,
+  observation_row_n: 12,
+  observation_missing_n: 0,
   forecast_collection_date_min: "2026-08-01",
   forecast_collection_date_max: "2026-08-30",
   target_date_min: "2026-08-04",
   target_date_max: "2026-09-02",
   observation_providers: ["open-meteo"],
+  temperature_min_forecast_present_n: 12,
+  temperature_min_observed_present_n: 12,
   temperature_min_n: 12,
   temperature_min_mae: 1.25,
   temperature_min_bias: -0.5,
   temperature_min_status: "provisional",
   temperature_max_n: 30,
+  temperature_max_forecast_present_n: 30,
+  temperature_max_observed_present_n: 30,
   temperature_max_mae: 1.5,
   temperature_max_bias: 0.2,
   temperature_max_status: "reliable",
   wind_speed_max_n: 0,
+  wind_speed_max_forecast_present_n: 0,
+  wind_speed_max_observed_present_n: 0,
   wind_speed_max_mae: null,
   wind_speed_max_bias: null,
   wind_speed_max_status: "insufficient",
   precipitation_sum_n: 12,
+  precipitation_sum_forecast_present_n: 12,
+  precipitation_sum_observed_present_n: 12,
   precipitation_sum_mae: 2,
   precipitation_sum_bias: 0.75,
   precipitation_sum_status: "provisional",
   rain_event_n: 12,
+  rain_probability_present_n: 12,
+  rain_observed_precipitation_present_n: 12,
   rain_tp: 4,
   rain_fp: 2,
   rain_fn: 1,
@@ -47,11 +62,18 @@ const row = {
 
 test("accuracy read model is a new RLS-scoped security-invoker view", () => {
   assert.match(sql, /create view public\.forecast_accuracy[\s\S]*security_invoker = true/i);
+  assert.match(sql, /create view public\.forecast_accuracy_detail[\s\S]*security_invoker = true/i);
   assert.match(sql, /snapshots\.lead_days in \(1, 3, 5, 7\)/i);
   assert.match(sql, /observations\.observation_date = snapshots\.target_date/i);
+  assert.match(sql, /left join public\.weather_observations/i);
   assert.match(sql, /locations\.user_id = \(select auth\.uid\(\)\)/i);
   assert.match(sql, /array_agg\(distinct observation_provider order by observation_provider\)/i);
-  assert.match(sql, /min\(collection_date\) as forecast_collection_date_min/i);
+  assert.match(sql, /min\(forecast_collection_date\) as forecast_collection_date_min/i);
+  assert.match(sql, /'all_owned_locations'/i);
+  assert.match(sql, /count\(distinct scoped_rows\.location_id\)/i);
+  assert.match(sql, /observation_missing_n/);
+  assert.match(sql, /temperature_min_forecast_present_n/);
+  assert.match(sql, /forecast_snapshot_id/);
   assert.match(sql, /rain_precision_reason/);
   assert.match(sql, /rain_recall_reason/);
   assert.match(sql, /rain_false_alarm_rate_reason/);
@@ -86,8 +108,11 @@ test("accuracy read model exposes stable reasons for undefined rain ratios", () 
 
 test("normalizes the read model without turning null metrics into zero", () => {
   assert.deepEqual(normalizeAccuracy(row), {
+    scopeType: "location",
     locationId: "location-1",
     leadDays: 3,
+    locationCount: 1,
+    coverage: { forecastRows: 12, observationRows: 12, observationMissing: 0 },
     provenance: {
       forecastCollectionDateMin: "2026-08-01",
       forecastCollectionDateMax: "2026-08-30",
@@ -95,10 +120,10 @@ test("normalizes the read model without turning null metrics into zero", () => {
       targetDateMax: "2026-09-02",
       observationProviders: ["open-meteo"],
     },
-    temperatureMin: { n: 12, mae: 1.25, bias: -0.5, status: "provisional" },
-    temperatureMax: { n: 30, mae: 1.5, bias: 0.2, status: "reliable" },
-    windSpeedMax: { n: 0, mae: null, bias: null, status: "insufficient" },
-    precipitationSum: { n: 12, mae: 2, bias: 0.75, status: "provisional" },
+    temperatureMin: { forecastPresentN: 12, observedPresentN: 12, n: 12, mae: 1.25, bias: -0.5, status: "provisional" },
+    temperatureMax: { forecastPresentN: 30, observedPresentN: 30, n: 30, mae: 1.5, bias: 0.2, status: "reliable" },
+    windSpeedMax: { forecastPresentN: 0, observedPresentN: 0, n: 0, mae: null, bias: null, status: "insufficient" },
+    precipitationSum: { forecastPresentN: 12, observedPresentN: 12, n: 12, mae: 2, bias: 0.75, status: "provisional" },
     rainEvents: {
       n: 12,
       tp: 4,
@@ -114,6 +139,34 @@ test("normalizes the read model without turning null metrics into zero", () => {
       status: "provisional",
     },
   });
+});
+
+test("normalizes row-level accuracy provenance and unmatched observations", () => {
+  const detail = normalizeAccuracyDetail({
+    forecast_snapshot_id: "snapshot-1",
+    location_id: "location-1",
+    forecast_run_id: "run-1",
+    collected_at: "2026-09-16T04:17:00Z",
+    forecast_collection_date: "2026-09-16",
+    target_date: "2026-09-17",
+    lead_days: 1,
+    observation_id: null,
+    observation_provider: null,
+    forecast_temperature_min: 12,
+    observed_temperature_min: null,
+    forecast_temperature_max: 20,
+    observed_temperature_max: null,
+    forecast_precipitation_sum: 0,
+    observed_precipitation_sum: null,
+    precipitation_probability: 20,
+    forecast_wind_speed_max: 15,
+    observed_wind_speed_max: null,
+    observed_weather_code: null,
+    observation_available: false,
+  });
+  assert.equal(detail.targetDate, "2026-09-17");
+  assert.equal(detail.observationAvailable, false);
+  assert.equal(detail.observedTemperatureMax, null);
 });
 
 test("accuracy repository requires auth, scopes locations, and requests supported leads", async () => {
