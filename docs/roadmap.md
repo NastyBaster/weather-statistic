@@ -35,7 +35,7 @@ deploy, invoke, or operate them.
 | **7.2** | **Scheduled observations using a separate opaque machine token, Vault/Edge secret storage, and a daily production Cron job. Scheduled smoke acceptance and the first automatic Cron acceptance completed.** | **Complete** |
 | **8.0** | **Accuracy contract, including sample-size rules and explicit precipitation-event metrics** | **Complete** |
 | **8.1** | **Accuracy read model implementing the approved contract, with coverage, scored-pair provenance, detail pagination, and RLS-scoped per-location/all-owned scopes** | **Complete** |
-| 9 | Real-data dashboard with honest loading, missing-data, and provenance states | In progress (PR #62) |
+| **9** | **Real-data dashboard with honest loading, missing-data, provenance, and sample-size states** | **Complete** |
 | 10 | Charts, filters, and CSV export over the real read models | Planned |
 | 11 | Production hardening, operational review, and recovery exercises | Planned |
 
@@ -68,7 +68,7 @@ dashboard remain deferred to later stages.
 
 Stages 8.0/8.1 accuracy work merged to `main` in PR #59 on 2026-09-16. Its migrations are
 applied in development but not production; production schema changes remain a separately
-authorized operation. Stage 9 is now in progress in PR #62.
+authorized operation. Stage 9 merged to `main` in PR #62 on 2026-09-16.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.
