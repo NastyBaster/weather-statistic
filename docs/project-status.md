@@ -24,14 +24,17 @@ procedures and raw evidence out of this file.
 | 7.0 | Observation provider contract and immutable observation schema | Complete |
 | 7.1 | Manual observation collector with authorization, idempotency, and validation | Complete |
 | 7.2 | Scheduled observation collector and production Cron rollout | Complete |
+| 8.0 | Accuracy contract with sample-size rules and explicit precipitation-event metrics | Complete |
+| 8.1 | RLS-scoped accuracy read model with coverage, provenance, per-location/all-owned scopes, and detail pagination | Complete |
 
 Google OAuth is configured and working in development and production.
 
 ## Current environments
 
 - **Development:** authentication, profiles, personal locations, forecast schema, manual
-  collection, hardened scheduler path, and the observation schema have been validated. The
-  observation function accepts a dedicated machine token; pg_cron is not enabled in this project.
+  collection, hardened scheduler path, observation schema, and the accuracy read model have been
+  validated. The observation function accepts a dedicated machine token; pg_cron is not enabled
+  in this project.
 - **Production:** Cloudflare Pages serves the merged `main` deployment. On 2026-09-15 the
   explicitly authorized production database reset removed disposable data and replayed all seven
   repository migrations. The reviewed forecast and observation functions were redeployed; the
@@ -43,10 +46,9 @@ Google OAuth is configured and working in development and production.
   and would require a Supabase backup/export.
 
 There is no production UI trigger. Personal locations are real when users add
-them, but UI weather
-and history remain intentionally demonstrative; production snapshots are not displayed. Never
-mix demo and real data without an explicit, visible boundary. Observations, accuracy calculations,
-and the real-data dashboard remain deferred. Global geocoding is optional and deferred.
+them, but the accuracy read model migrations are not yet applied to production and the real-data
+dashboard is still under implementation. Never mix demo and real data without an explicit, visible
+boundary. Global geocoding is optional and deferred.
 
 Stage 5.2.0 selected Supabase Cron with `pg_net`, an opaque 256-bit machine Bearer credential
 stored only in Supabase Vault and the managed Edge secret store, and a daily 04:17 UTC cadence.
@@ -65,8 +67,8 @@ passed on 2026-09-16 for both daily collectors; the configured jobs are not prod
 
 Stage 6 is complete and deployed to the frontend. Guests retain an explicitly labeled demo view;
 authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
-forecast history and honest empty/loading/error states. Actual-weather observations and accuracy remain
-deferred to Stages 7–9.
+forecast history and honest empty/loading/error states. Actual-weather observations are collected;
+the accuracy read model is complete, while the production dashboard integration remains in Stage 9.
 
 Stage 7.0 is complete. Development has the new RLS-protected, immutable `weather_observations`
 schema; provider collection, scheduling, and accuracy remain separate stages.
@@ -80,6 +82,16 @@ the managed Edge secret store, with `forecast-observation-daily` scheduled for 0
 2026-09-16 the first automatic Cron run succeeded: three observations for 2026-09-15 were inserted
 at 04:47 UTC with no collection failure. The paired `forecast-collector-daily` run at 04:17 UTC
 also succeeded for three locations, with 24 snapshots created and zero failures.
+
+Stage 8.0 and 8.1 are complete. PR #59 merged to `main` on 2026-09-16 as `b83eb99`. The
+development read model includes per-location and all-owned-location aggregates, per-metric
+coverage, scored-pair provenance ranges, row-level detail provenance, and deterministic detail
+pagination. Its migrations are not applied to production; that remains an explicitly authorized
+future operation.
+
+Stage 9 is in progress in PR #62. It connects the authenticated dashboard to the real forecast
+and accuracy read models while retaining honest loading, missing-data, provenance, and sample-size
+states.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.
