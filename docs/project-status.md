@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-16
 
 This is the concise, sanitized continuity record. Update it when a stage merges; keep detailed
 procedures and raw evidence out of this file.
@@ -19,11 +19,11 @@ procedures and raw evidence out of this file.
 | 5.1.1 | Production collector rollout and sanitized validation | Complete |
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Forecast scheduler contract | Complete |
-| 5.3 | Operational observability for collection health and failures without sensitive logs | In progress |
+| 5.3 | Operational observability for collection health and failures without sensitive logs | Complete |
 | 6 | Forecast history backed by real snapshots with an explicit demo/real boundary | Complete |
 | 7.0 | Observation provider contract and immutable observation schema | Complete |
 | 7.1 | Manual observation collector with authorization, idempotency, and validation | Complete |
-| 7.2 | Scheduled observation collector and production Cron rollout | In progress |
+| 7.2 | Scheduled observation collector and production Cron rollout | Complete |
 
 Google OAuth is configured and working in development and production.
 
@@ -37,9 +37,10 @@ Google OAuth is configured and working in development and production.
   repository migrations. The reviewed forecast and observation functions were redeployed; the
   observation scheduler is configured with a dedicated Vault/Edge secret and daily Cron job.
 - **Production reset baseline:** `profiles`, `locations`, `forecast_runs`, and
-  `forecast_snapshots` are present, protected by RLS, and contain zero rows after the reset.
-  Historical production
-  rows are not recoverable from the reset itself and would require a Supabase backup/export.
+  `forecast_snapshots` were present, protected by RLS, and contained zero rows immediately after
+  the 2026-09-15 reset. The first automatic collection has since populated the production run and
+  observation tables; historical rows removed by the reset are not recoverable from the reset itself
+  and would require a Supabase backup/export.
 
 There is no production UI trigger. Personal locations are real when users add
 them, but UI weather
@@ -56,11 +57,11 @@ parallel manual calls, the zero-active-location path, a partial provider failure
 boundaries, duplicate identity checks, and final disabled-scheduler state. The development
 scheduler remains disabled; production scheduling is still a separate approved operational stage.
 
-Stage 5.3 now has a service-role-only `get_forecast_collection_health` RPC and a machine-token
-`forecast-health-monitor` Edge Function in `main`. Development and production have the monitor
-deployed with Supabase-managed Telegram secrets; GitHub Actions polls production every 15 minutes,
-and real Telegram delivery tests passed. Production's first automatic Cron acceptance remains
-pending; the configured job is not a production UI trigger.
+Stage 5.3 is complete. It has a service-role-only `get_forecast_collection_health` RPC and a
+machine-token `forecast-health-monitor` Edge Function in `main`. Development and production have
+the monitor deployed with Supabase-managed Telegram secrets; GitHub Actions polls production every
+15 minutes, and real Telegram delivery tests passed. The first automatic production Cron acceptance
+passed on 2026-09-16 for both daily collectors; the configured jobs are not production UI triggers.
 
 Stage 6 is complete and deployed to the frontend. Guests retain an explicitly labeled demo view;
 authenticated users read only their own RLS-scoped forecast snapshots. The dashboard shows the latest
@@ -74,10 +75,11 @@ Stage 7.1 is complete. The allowlisted manual collector accepted the previous lo
 active locations and inserted three observations with zero failures in development. The same
 reviewed function is deployed in production.
 
-Stage 7.2 is in progress. Production uses a separate opaque scheduler token stored only in Vault
-and the managed Edge secret store, with `forecast-observation-daily` scheduled for 04:47 UTC.
-The authorized scheduled smoke acceptance succeeded for three locations with zero failures and
-three inserted observations; first automatic Cron acceptance remains pending.
+Stage 7.2 is complete. Production uses a separate opaque scheduler token stored only in Vault and
+the managed Edge secret store, with `forecast-observation-daily` scheduled for 04:47 UTC. On
+2026-09-16 the first automatic Cron run succeeded: three observations for 2026-09-15 were inserted
+at 04:47 UTC with no collection failure. The paired `forecast-collector-daily` run at 04:17 UTC
+also succeeded for three locations, with 24 snapshots created and zero failures.
 
 A single-task Agent Bridge bootstrap is proposed in a separate bounded PR; it is not live-verified,
 does not execute scheduler or Supabase operations, and does not include batch/watch automation.

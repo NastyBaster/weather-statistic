@@ -28,11 +28,11 @@ deploy, invoke, or operate them.
 | 5.1.2 | Durable agent context, project status, and consolidated roadmap | Complete |
 | 5.2.0 | Scheduler contract: Supabase Cron + `pg_net`, opaque machine Bearer auth, daily 04:17 UTC, single-flight guard, and rollout/rollback gates. No scheduler is implemented or enabled. | Complete |
 | **5.2.1** | **Repository hardening and the authorized development validation matrix are complete. Remote evidence covers authenticated admin/non-admin paths, spoofing rejection, repeated and parallel calls, provider failure, no-active-location, RLS/immutability, duplicate identities, and disabled-scheduler verification.** | **Complete** |
-| **5.3** | **Operational observability for collection health and failures without sensitive logs. The service-role health RPC and machine-token Telegram monitor are merged and validated in development; production rollout and regular polling remain pending.** | **In progress** |
+| **5.3** | **Operational observability for collection health and failures without sensitive logs. The service-role health RPC and machine-token Telegram monitor are merged, deployed, polled in production, and covered by the first automatic Cron acceptance.** | **Complete** |
 | **6** | **Forecast history backed by real snapshots with an explicit demo/real boundary. Authenticated users read their RLS-scoped snapshots; observation-based actuals and accuracy remain deferred.** | **Complete** |
 | **7.0** | **Observation provider contract and immutable observation schema. Development migration is applied and RLS/immutability boundaries are validated; collection remains deferred.** | **Complete** |
 | **7.1** | **Manual observation collector with authorization, idempotency, and validation. Development deployment and authenticated smoke acceptance completed; the reviewed function is also deployed in production.** | **Complete** |
-| **7.2** | **Scheduled observations using a separate opaque machine token, Vault/Edge secret storage, and a daily production Cron job. Scheduled smoke acceptance completed; first automatic Cron acceptance remains pending.** | **In progress** |
+| **7.2** | **Scheduled observations using a separate opaque machine token, Vault/Edge secret storage, and a daily production Cron job. Scheduled smoke acceptance and the first automatic Cron acceptance completed.** | **Complete** |
 | 8.0 | Accuracy contract, including sample-size rules and explicit precipitation-event metrics | Planned |
 | 8.1 | Accuracy read model implementing the approved contract | Planned |
 | 9 | Real-data dashboard with honest loading, missing-data, and provenance states | Planned |
@@ -59,10 +59,15 @@ These items do not block the core weather pipeline and require separate bounded 
 
 The scheduler contract and repository hardening are merged to `main`; the authorized development
 validation matrix is complete. On 2026-09-15 the explicitly authorized production reset replayed
-all seven repository migrations and redeployed the reviewed forecast and observation collectors.
-The production observation Cron job is active at 04:47 UTC; its scheduled smoke path succeeded
-with sanitized evidence and no duplicate identity was introduced. First automatic Cron acceptance
-remains pending. Observations, accuracy, geocoding, and other future functionality remain deferred.
+the repository migrations and redeployed the reviewed forecast and observation collectors. On
+2026-09-16 both production Cron jobs completed their first automatic runs successfully: the
+04:17 UTC forecast run processed three locations, created 24 snapshots, and had zero failures;
+the 04:47 UTC observation run inserted three observations for the previous local day with zero
+failures. Observations are now being collected, while accuracy, geocoding, and the real-data
+dashboard remain deferred to later stages.
+
+Stage 8.0/8.1 accuracy work is currently under review in PR #59. Its migration has not been
+applied to production; production schema changes remain a separately authorized operation.
 
 The proposed weather Agent Bridge is a separate, not-yet-live-verified single-task tooling scope;
 batch/watch execution and runtime operations remain excluded.
