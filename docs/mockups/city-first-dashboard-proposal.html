@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forecast Reality Check — City-first dashboard proposal</title>
+  <style>
+    :root {
+      --paper: #f3f1e8;
+      --surface: #fffdf8;
+      --ink: #173b32;
+      --muted: #687770;
+      --line: #dddcd0;
+      --green: #176b4f;
+      --green-soft: #e2f0e5;
+      --coral: #ff7f5c;
+      --yellow: #d7ec75;
+      --shadow: 0 14px 35px rgba(32, 55, 44, .08);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, select { font: inherit; }
+    button { cursor: pointer; }
+    .page { width: min(100% - 24px, 1180px); margin: 0 auto; padding: 18px 0 48px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0 22px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.02em; }
+    .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: #fff; font-size: 13px; }
+    .nav { display: flex; gap: 18px; color: var(--muted); font-size: 13px; }
+    .nav strong { color: var(--green); }
+    .hero { padding: 38px 0 26px; }
+    .eyebrow { margin: 0 0 8px; color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 650px; margin-bottom: 12px; font: 500 clamp(34px, 6vw, 68px)/.98 Georgia, serif; letter-spacing: -.045em; }
+    h1 em { color: var(--green); }
+    .lede { max-width: 600px; color: var(--muted); }
+    .layout { display: grid; gap: 16px; }
+    .panel { background: var(--surface); border: 1px solid rgba(221, 220, 208, .8); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .locations { padding: 20px; }
+    .panel-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    h2 { margin-bottom: 0; font: 500 28px/1 Georgia, serif; letter-spacing: -.025em; }
+    .panel-note { margin: 0; color: var(--muted); font-size: 12px; }
+    .location-list { display: grid; gap: 10px; }
+    .location { width: 100%; min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--ink); text-align: left; }
+    .location:hover, .location:focus-visible { border-color: var(--green); }
+    .location[aria-pressed="true"] { background: var(--green-soft); border-color: var(--green); box-shadow: inset 4px 0 0 var(--green); }
+    .location-name { font-weight: 700; }
+    .location-state { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .check { color: var(--green); font-weight: 800; }
+    .dashboard { padding: 20px; }
+    .selected-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .selected-context h2 { font-size: 31px; }
+    .selected-context p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .change-city { border: 0; border-radius: 999px; padding: 10px 14px; background: var(--green); color: #fff; font-weight: 700; }
+    .lead-picker { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: -5px 0 16px; }
+    .lead-picker-label { margin-right: 4px; color: var(--muted); font-size: 11px; }
+    .lead-option { border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; background: transparent; color: var(--muted); font-size: 11px; }
+    .lead-option[aria-pressed="true"] { border-color: var(--green); background: var(--green-soft); color: var(--green); font-weight: 800; }
+    .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .stat { min-height: 144px; padding: 16px; border: 1px solid var(--line); border-top: 3px solid var(--coral); border-radius: 14px; }
+    .stat:nth-child(2) { border-top-color: var(--green); }
+    .stat:nth-child(3) { border-top-color: #8dd4dc; }
+    .stat:nth-child(4) { border-top-color: var(--yellow); }
+    .stat-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .stat-value { margin: 18px 0 8px; font: 500 clamp(30px, 7vw, 46px)/.9 Georgia, serif; letter-spacing: -.04em; }
+    .stat-value small { font: 500 18px Georgia, serif; }
+    .stat-note { margin: 0; color: var(--muted); font-size: 11px; }
+    .metric-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .metric-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .metric-group h3 { margin: 0; font-size: 16px; }
+    .metric-group-head span { color: var(--muted); font-size: 11px; }
+    .metric-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric-cell { padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; }
+    .metric-cell-label { color: var(--muted); font-size: 11px; }
+    .metric-cell-value { margin-top: 4px; font-size: 18px; font-weight: 800; }
+    .metric-cell-value small { color: var(--muted); font-size: 11px; font-weight: 500; }
+    .metric-cell-note { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+    .event-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .event-cell { padding: 8px 5px; border-radius: 9px; background: var(--green-soft); text-align: center; }
+    .event-cell b { display: block; font-size: 16px; }
+    .event-cell span { color: var(--muted); font-size: 10px; }
+    .provenance { margin: 16px 0 0; padding: 11px 12px; border-radius: 10px; background: #f4f3eb; color: var(--muted); font-size: 11px; }
+    .detail-list { display: grid; gap: 8px; }
+    .day-row { display: grid; grid-template-columns: 70px repeat(4, minmax(0, 1fr)); align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .day-date { font-weight: 800; }
+    .day-date small { display: block; color: var(--muted); font-size: 10px; font-weight: 500; }
+    .day-value span { display: block; color: var(--muted); font-size: 10px; }
+    .day-value strong { display: block; margin-top: 2px; }
+    .day-head { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .day-head, .day-value { min-width: 0; }
+    .history { margin-top: 16px; padding: 20px; }
+    .history-chart { display: flex; align-items: end; gap: 10px; height: 180px; padding: 24px 8px 0; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(to bottom, transparent 0 43px, rgba(221, 220, 208, .55) 44px); }
+    .bar-wrap { flex: 1; display: flex; min-width: 0; height: 100%; flex-direction: column; justify-content: end; align-items: center; gap: 6px; }
+    .bar-value { font-size: 11px; font-weight: 800; }
+    .bar { width: min(52px, 100%); height: var(--bar-height); border-radius: 8px 8px 0 0; background: var(--coral); }
+    .bar-label { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .history-table { width: 100%; margin-top: 16px; border-collapse: collapse; font-size: 12px; }
+    .history-table th, .history-table td { padding: 10px 5px; border-bottom: 1px solid var(--line); text-align: left; }
+    .history-table th { color: var(--muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+    .history-table td:not(:first-child), .history-table th:not(:first-child) { text-align: right; }
+    .missing { color: var(--muted); }
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; gap: 16px; }
+    .design-note { margin-top: 18px; padding: 12px 14px; border-left: 3px solid var(--green); color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 639px) {
+      .day-row { grid-template-columns: 68px repeat(2, minmax(0, 1fr)); align-items: start; }
+      .day-head { display: none; }
+      .day-value { padding-bottom: 5px; }
+      .bar-label { white-space: normal; text-align: center; line-height: 1.1; }
+    }
+
+    @media (min-width: 640px) {
+      .page { width: min(100% - 48px, 1180px); padding-top: 28px; }
+      .location-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .stat { min-height: 164px; }
+    }
+    @media (min-width: 1024px) {
+      .layout { grid-template-columns: 280px minmax(0, 1fr); align-items: start; }
+      .locations { position: sticky; top: 20px; }
+      .location-list { grid-template-columns: 1fr; }
+      .dashboard { padding: 28px; }
+      .locations { padding: 24px 18px; }
+      .history { grid-column: 2; margin-top: 0; }
+      .design-note { grid-column: 1 / -1; }
+    }
+    @media (min-width: 1440px) {
+      .page { padding-top: 36px; }
+      .topbar { padding-bottom: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">F</span><span>Forecast<br><small>REALITY CHECK</small></span></div>
+      <nav class="nav" aria-label="Основна навігація"><strong>Огляд</strong><span>Історія</span><span>Проєкт</span></nav>
+    </header>
+
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Чесно про прогнози</p>
+      <h1 id="page-title">Погода пам’ятає, <em>що нам обіцяли.</em></h1>
+      <p class="lede">Спочатку оберіть місто. Нижче одразу видно, для якого міста показані прогноз, фактична погода та точність.</p>
+    </section>
+
+    <div class="layout">
+      <section class="panel locations" aria-labelledby="locations-title">
+        <div class="panel-head">
+          <div><p class="eyebrow">Контекст</p><h2 id="locations-title">Мої міста</h2></div>
+          <p class="panel-note">4 міста</p>
+        </div>
+        <div class="location-list" role="group" aria-label="Вибір міста">
+          <button class="location" type="button" aria-pressed="true" data-city="Львів, Україна" data-region="Львівська область"><span><span class="location-name">Львів, UA</span><span class="location-state">Обране місто</span></span><span class="check">✓</span></button>
+          <button class="location" type="button" aria-pressed="false" data-city="Одеса, Україна" data-region="Одеська область"><span><span class="location-name">Одеса, UA</span><span class="location-state">Активне</span></span><span class="check" aria-hidden="true">→</span></button>
+          <button class="location" type="button" aria-pressed="false" data-city="Полтава, Україна" data-region="Полтавська область"><span><span class="location-name">Полтава, UA</span><span class="location-state">Призупинене</span></span><span class="check" aria-hidden="true">→</span></button>
+          <button class="location" type="button" aria-pressed="false" data-city="Чернівці, Україна" data-region="Чернівецька область"><span><span class="location-name">Чернівці, UA</span><span class="location-state">Активне</span></span><span class="check" aria-hidden="true">→</span></button>
+        </div>
+        <p class="design-note">На мобільному цей блок іде першим. На широкому екрані він залишається поруч зі статистикою, щоб назва міста не губилася під час прокручування.</p>
+      </section>
+
+      <section class="panel dashboard" aria-labelledby="city-title" aria-live="polite">
+        <div class="selected-context">
+          <div><p class="eyebrow">Зараз дивимося</p><h2 id="city-title">Львів, Україна</h2><p id="city-region">Львівська область · реальні дані та прогноз</p></div>
+          <button class="change-city" type="button" id="focus-cities">Змінити місто</button>
+        </div>
+        <div class="lead-picker" role="group" aria-label="Горизонт прогнозу"><span class="lead-picker-label">Горизонт:</span><button class="lead-option" type="button" aria-pressed="true">1 день</button><button class="lead-option" type="button" aria-pressed="false">3 дні</button><button class="lead-option" type="button" aria-pressed="false">5 днів</button><button class="lead-option" type="button" aria-pressed="false">7 днів</button></div>
+        <div class="stats" aria-label="Короткий огляд обраного міста">
+          <article class="stat"><div class="stat-label">Температура</div><div class="stat-value">23.8<small>°C</small></div><p class="stat-note">прогноз max · 16 вересня</p></article>
+          <article class="stat"><div class="stat-label">Опади</div><div class="stat-value">—<small>mm</small></div><p class="stat-note">фактичні дані ще не пов'язані</p></article>
+          <article class="stat"><div class="stat-label">Вітер</div><div class="stat-value">—<small>km/h</small></div><p class="stat-note">потрібне парне спостереження</p></article>
+          <article class="stat"><div class="stat-label">Покриття</div><div class="stat-value">0<small>/ 7</small></div><p class="stat-note">днів з повною парою forecast + actual</p></article>
+        </div>
+        <section class="metric-group" aria-labelledby="temp-metrics"><div class="metric-group-head"><h3 id="temp-metrics">Температура · помилка прогнозу</h3><span>lead 1 день · n = 0</span></div><div class="metric-grid"><div class="metric-cell"><div class="metric-cell-label">MAE min</div><div class="metric-cell-value">— <small>°C</small></div><p class="metric-cell-note">середня абсолютна помилка</p></div><div class="metric-cell"><div class="metric-cell-label">MAE max</div><div class="metric-cell-value">— <small>°C</small></div><p class="metric-cell-note">середня абсолютна помилка</p></div><div class="metric-cell"><div class="metric-cell-label">Bias min</div><div class="metric-cell-value">— <small>°C</small></div><p class="metric-cell-note">forecast − actual</p></div><div class="metric-cell"><div class="metric-cell-label">Bias max</div><div class="metric-cell-value">— <small>°C</small></div><p class="metric-cell-note">forecast − actual</p></div></div></section>
+        <section class="metric-group" aria-labelledby="rain-metrics"><div class="metric-group-head"><h3 id="rain-metrics">Опади · кількість та події</h3><span>пороги: 1 mm · 50%</span></div><div class="metric-grid"><div class="metric-cell"><div class="metric-cell-label">MAE кількості</div><div class="metric-cell-value">— <small>mm</small></div><p class="metric-cell-note">без підміни пропусків на 0</p></div><div class="metric-cell"><div class="metric-cell-label">Precision / recall</div><div class="metric-cell-value">— / — <small>%</small></div><p class="metric-cell-note">null, якщо немає подій</p></div></div><div class="event-grid" aria-label="Матриця подій опадів"><div class="event-cell"><b>—</b><span>TP</span></div><div class="event-cell"><b>—</b><span>FP</span></div><div class="event-cell"><b>—</b><span>FN</span></div><div class="event-cell"><b>—</b><span>TN</span></div></div></section>
+        <section class="metric-group" aria-labelledby="wind-metrics"><div class="metric-group-head"><h3 id="wind-metrics">Вітер · максимальна швидкість</h3><span>lead 1 день</span></div><div class="metric-grid"><div class="metric-cell"><div class="metric-cell-label">MAE</div><div class="metric-cell-value">— <small>km/h</small></div><p class="metric-cell-note">порівняння max wind</p></div><div class="metric-cell"><div class="metric-cell-label">Bias</div><div class="metric-cell-value">— <small>km/h</small></div><p class="metric-cell-note">напрямок систематичної помилки</p></div></div></section>
+        <p class="provenance">Джерело фактичної погоди: Open-Meteo · період paired observations: ще немає · статус: недостатньо парних спостережень</p>
+      </section>
+
+      <section class="panel history" aria-labelledby="history-title">
+        <div class="panel-head"><div><p class="eyebrow">Як змінювалася думка</p><h2 id="history-title">Історія прогнозу</h2></div><p class="panel-note">Львів · останні прогнози</p></div>
+        <div class="history-chart" role="img" aria-label="Стовпчикова діаграма прогнозованої температури для останніх дат">
+          <div class="bar-wrap"><span class="bar-value">23.8°</span><span class="bar" style="--bar-height: 92%"></span><span class="bar-label">16 вересня</span></div>
+          <div class="bar-wrap"><span class="bar-value">23.6°</span><span class="bar" style="--bar-height: 88%"></span><span class="bar-label">17 вересня</span></div>
+          <div class="bar-wrap"><span class="bar-value">18.6°</span><span class="bar" style="--bar-height: 62%"></span><span class="bar-label">18 вересня</span></div>
+          <div class="bar-wrap"><span class="bar-value">20.8°</span><span class="bar" style="--bar-height: 74%"></span><span class="bar-label">19 вересня</span></div>
+          <div class="bar-wrap"><span class="bar-value">22.5°</span><span class="bar" style="--bar-height: 84%"></span><span class="bar-label">20 вересня</span></div>
+          <div class="bar-wrap"><span class="bar-value">16.5°</span><span class="bar" style="--bar-height: 55%"></span><span class="bar-label">21 вересня</span></div>
+        </div>
+        <div class="detail-list" aria-label="Деталі по днях"><div class="day-row day-head"><span>Дата</span><span>Температура</span><span>Вітер</span><span>Опади</span><span>Подія</span></div><div class="day-row"><span class="day-date">16 вер.<small>lead 1d</small></span><span class="day-value"><span>min / max</span><strong>14.2° / 23.8°</strong></span><span class="day-value"><span>forecast</span><strong>18 km/h</strong></span><span class="day-value"><span>mm / prob</span><strong>— / 20%</strong></span><span class="day-value"><span>actual</span><strong>—</strong></span></div><div class="day-row"><span class="day-date">17 вер.<small>lead 1d</small></span><span class="day-value"><span>min / max</span><strong>13.8° / 23.6°</strong></span><span class="day-value"><span>forecast</span><strong>15 km/h</strong></span><span class="day-value"><span>mm / prob</span><strong>— / 55%</strong></span><span class="day-value"><span>actual</span><strong>—</strong></span></div><div class="day-row"><span class="day-date">18 вер.<small>lead 1d</small></span><span class="day-value"><span>min / max</span><strong>11.4° / 18.6°</strong></span><span class="day-value"><span>forecast</span><strong>21 km/h</strong></span><span class="day-value"><span>mm / prob</span><strong>— / 70%</strong></span><span class="day-value"><span>actual</span><strong>—</strong></span></div></div>
+      </section>
+    </div>
+
+    <footer class="footer"><span>Навчальний проєкт про точність прогнозів</span><span>Дані завантажені з вашої колекції прогнозів</span></footer>
+  </main>
+  <script>
+    const cityTitle = document.getElementById('city-title');
+    const cityRegion = document.getElementById('city-region');
+    const cityButtons = [...document.querySelectorAll('[data-city]')];
+    cityButtons.forEach((button) => button.addEventListener('click', () => {
+      cityButtons.forEach((item) => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
+      cityTitle.textContent = button.dataset.city;
+      cityRegion.textContent = `${button.dataset.region} · реальні дані та прогноз`;
+    }));
+    document.getElementById('focus-cities').addEventListener('click', () => {
+      document.querySelector('.locations').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.querySelectorAll('.lead-option').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('.lead-option').forEach((item) => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
+    }));
+  </script>
+</body>
+</html>

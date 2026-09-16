@@ -96,6 +96,39 @@
             <span class="stat-card__note">за останні 30 днів</span>
           </article>
         </div>
+        <div class="accuracy-controls" aria-label="Горизонт прогнозу">
+          <span>Горизонт прогнозу</span>
+          <button class="accuracy-lead accuracy-lead--active" data-lead-days="1" type="button" aria-pressed="true">1 день</button>
+          <button class="accuracy-lead" data-lead-days="3" type="button" aria-pressed="false">3 дні</button>
+          <button class="accuracy-lead" data-lead-days="5" type="button" aria-pressed="false">5 днів</button>
+          <button class="accuracy-lead" data-lead-days="7" type="button" aria-pressed="false">7 днів</button>
+        </div>
+        <div class="accuracy-dashboard" data-accuracy-dashboard hidden>
+          <section class="accuracy-group" aria-labelledby="temperature-metrics-title">
+            <div class="accuracy-group__heading"><h3 id="temperature-metrics-title">Температура</h3><span data-metric-status="temperature">—</span></div>
+            <div class="accuracy-metric-grid">
+              <article class="accuracy-metric"><span>MAE min</span><strong data-metric="temperatureMin.mae">—</strong><small>°C · <b data-metric="temperatureMin.n">0</b> пар</small></article>
+              <article class="accuracy-metric"><span>MAE max</span><strong data-metric="temperatureMax.mae">—</strong><small>°C · <b data-metric="temperatureMax.n">0</b> пар</small></article>
+              <article class="accuracy-metric"><span>Bias min</span><strong data-metric="temperatureMin.bias">—</strong><small>°C · forecast − actual</small></article>
+              <article class="accuracy-metric"><span>Bias max</span><strong data-metric="temperatureMax.bias">—</strong><small>°C · forecast − actual</small></article>
+            </div>
+          </section>
+          <section class="accuracy-group" aria-labelledby="precipitation-metrics-title">
+            <div class="accuracy-group__heading"><h3 id="precipitation-metrics-title">Опади</h3><span>пороги: 1 mm · 50%</span></div>
+            <div class="accuracy-metric-grid">
+              <article class="accuracy-metric"><span>MAE кількості</span><strong data-metric="precipitationSum.mae">—</strong><small>mm · <b data-metric="precipitationSum.n">0</b> пар</small></article>
+              <article class="accuracy-metric"><span>Bias кількості</span><strong data-metric="precipitationSum.bias">—</strong><small>mm · forecast − actual</small></article>
+              <article class="accuracy-metric"><span>Precision</span><strong data-metric="rainEvents.precision">—</strong><small data-metric-note="rainEvents.precision">немає подій</small></article>
+              <article class="accuracy-metric"><span>Recall</span><strong data-metric="rainEvents.recall">—</strong><small data-metric-note="rainEvents.recall">немає фактичних подій</small></article>
+            </div>
+            <div class="rain-matrix" aria-label="Матриця подій опадів"><span><b data-metric="rainEvents.tp">0</b> TP</span><span><b data-metric="rainEvents.fp">0</b> FP</span><span><b data-metric="rainEvents.fn">0</b> FN</span><span><b data-metric="rainEvents.tn">0</b> TN</span></div>
+          </section>
+          <section class="accuracy-group" aria-labelledby="wind-metrics-title">
+            <div class="accuracy-group__heading"><h3 id="wind-metrics-title">Вітер</h3><span data-metric-status="wind">—</span></div>
+            <div class="accuracy-metric-grid"><article class="accuracy-metric"><span>MAE max</span><strong data-metric="windSpeedMax.mae">—</strong><small>km/h · <b data-metric="windSpeedMax.n">0</b> пар</small></article><article class="accuracy-metric"><span>Bias max</span><strong data-metric="windSpeedMax.bias">—</strong><small>km/h · forecast − actual</small></article></div>
+          </section>
+          <p class="accuracy-provenance" data-accuracy-provenance>Джерело фактичної погоди: ще не завантажено.</p>
+        </div>
       </section>
 
       <section class="locations" aria-labelledby="locations-title" data-locations>
