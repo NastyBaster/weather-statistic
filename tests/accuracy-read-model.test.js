@@ -6,6 +6,7 @@ import { createAccuracyRepository, normalizeAccuracy, normalizeAccuracyDetail } 
 const migrationName = "202609160002_complete_accuracy_read_model.sql";
 const migrationPath = new URL(`../supabase/migrations/${migrationName}`, import.meta.url);
 const sql = await readFile(migrationPath, "utf8");
+const refinementSql = await readFile(new URL("../supabase/migrations/202609160003_refine_accuracy_provenance.sql", import.meta.url), "utf8");
 
 const row = {
   scope_type: "location",
@@ -98,6 +99,13 @@ test("accuracy read model keeps event counts, numeric metrics, and per-metric st
   assert.match(sql, /precipitation_probability >= 50/);
   assert.match(sql, /observed_precipitation_sum >= 1/);
   assert.match(sql, /when rain_actual_events < 5 or rain_actual_non_events < 5 then 'insufficient'/i);
+});
+
+test("accuracy provenance refinement limits date ranges to paired observations", () => {
+  assert.match(refinementSql, /pg_get_viewdef\('public\.forecast_accuracy'/i);
+  assert.match(refinementSql, /scoped_rows\.forecast_collection_date\) filter \(where scoped_rows\.observation_available\)/i);
+  assert.match(refinementSql, /scoped_rows\.target_date\) filter \(where scoped_rows\.observation_available\)/i);
+  assert.match(refinementSql, /create or replace view public\.forecast_accuracy/i);
 });
 
 test("accuracy read model exposes stable reasons for undefined rain ratios", () => {
@@ -196,4 +204,38 @@ test("accuracy repository requires auth, scopes locations, and requests supporte
   assert.match(calls[1][1], /observation_providers/);
   assert.deepEqual(calls[2], ["or", "location_id.in.(location-1),scope_type.eq.all_owned_locations"]);
   assert.deepEqual(calls[3], ["in", "lead_days", [1, 3, 5, 7]]);
+});
+
+test("accuracy detail repository paginates with a deterministic tie-breaker", async () => {
+  const calls = [];
+  let page = 0;
+  const client = {
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) },
+    from(table) {
+      calls.push(["from", table]);
+      const query = {
+        select(fields) { calls.push(["select", fields]); return query; },
+        in(field, values) { calls.push(["in", field, values]); return query; },
+        order(field, options) { calls.push(["order", field, options]); return query; },
+        range(from, to) {
+          calls.push(["range", from, to]);
+          page += 1;
+          return query;
+        },
+        then(resolve) {
+          return Promise.resolve({ data: page === 1 ? Array.from({ length: 500 }, () => ({})) : [], error: null }).then(resolve);
+        },
+      };
+      return query;
+    },
+  };
+  const repository = createAccuracyRepository(async () => client);
+  const result = await repository.getUserAccuracyDetails(["location-1"]);
+  assert.equal(result.length, 500);
+  assert.deepEqual(calls.filter(([name]) => name === "range"), [["range", 0, 499], ["range", 500, 999]]);
+  assert.deepEqual(calls.filter(([name]) => name === "order").slice(-3), [
+    ["order", "target_date", { ascending: true }],
+    ["order", "lead_days", { ascending: true }],
+    ["order", "forecast_snapshot_id", { ascending: true }],
+  ]);
 });

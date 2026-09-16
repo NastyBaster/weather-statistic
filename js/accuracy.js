@@ -3,6 +3,7 @@ import { getSupabaseClient } from "./supabase-client.js";
 const FIELDS = "scope_type,location_id,lead_days,location_count,forecast_row_n,observation_row_n,observation_missing_n,forecast_collection_date_min,forecast_collection_date_max,target_date_min,target_date_max,observation_providers,temperature_min_forecast_present_n,temperature_min_observed_present_n,temperature_min_n,temperature_min_mae,temperature_min_bias,temperature_min_status,temperature_max_forecast_present_n,temperature_max_observed_present_n,temperature_max_n,temperature_max_mae,temperature_max_bias,temperature_max_status,wind_speed_max_forecast_present_n,wind_speed_max_observed_present_n,wind_speed_max_n,wind_speed_max_mae,wind_speed_max_bias,wind_speed_max_status,precipitation_sum_forecast_present_n,precipitation_sum_observed_present_n,precipitation_sum_n,precipitation_sum_mae,precipitation_sum_bias,precipitation_sum_status,rain_probability_present_n,rain_observed_precipitation_present_n,rain_event_n,rain_tp,rain_fp,rain_fn,rain_tn,rain_precision,rain_precision_reason,rain_recall,rain_recall_reason,rain_false_alarm_rate,rain_false_alarm_rate_reason,rain_event_status";
 const DETAIL_FIELDS = "forecast_snapshot_id,location_id,forecast_run_id,collected_at,forecast_collection_date,target_date,lead_days,observation_id,observation_provider,forecast_temperature_min,observed_temperature_min,forecast_temperature_max,observed_temperature_max,forecast_precipitation_sum,observed_precipitation_sum,precipitation_probability,forecast_wind_speed_max,observed_wind_speed_max,observed_weather_code,observation_available";
 const LEAD_DAYS = [1, 3, 5, 7];
+const DETAIL_PAGE_SIZE = 500;
 
 export class AccuracyError extends Error {
   constructor(message, code = "ACCURACY_ERROR") {
@@ -116,15 +117,22 @@ export function createAccuracyRepository(getClient = getSupabaseClient) {
       if (userError || !userData.user) {
         throw new AccuracyError("Увійдіть, щоб переглядати деталі оцінки прогнозів.", "AUTH_REQUIRED");
       }
-      const { data, error } = await client
-        .from("forecast_accuracy_detail")
-        .select(DETAIL_FIELDS)
-        .in("location_id", locationIds)
-        .in("lead_days", LEAD_DAYS)
-        .order("target_date", { ascending: true })
-        .order("lead_days", { ascending: true });
-      if (error) throw new AccuracyError("Не вдалося завантажити деталі оцінки прогнозів.", "FETCH_FAILED");
-      return (data ?? []).map(normalizeAccuracyDetail);
+      const details = [];
+      for (let from = 0; ; from += DETAIL_PAGE_SIZE) {
+        const { data, error } = await client
+          .from("forecast_accuracy_detail")
+          .select(DETAIL_FIELDS)
+          .in("location_id", locationIds)
+          .in("lead_days", LEAD_DAYS)
+          .order("target_date", { ascending: true })
+          .order("lead_days", { ascending: true })
+          .order("forecast_snapshot_id", { ascending: true })
+          .range(from, from + DETAIL_PAGE_SIZE - 1);
+        if (error) throw new AccuracyError("Не вдалося завантажити деталі оцінки прогнозів.", "FETCH_FAILED");
+        details.push(...(data ?? []));
+        if (!data || data.length < DETAIL_PAGE_SIZE) break;
+      }
+      return details.map(normalizeAccuracyDetail);
     },
   };
 }
