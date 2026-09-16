@@ -28,6 +28,11 @@ let loadVersion = 0;
 
 function signed(value) { return value === 0 ? "0" : `${value > 0 ? "+" : "−"}${Math.abs(value)}`; }
 function formatDate(value) { return new Date(`${value}T12:00:00Z`).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }); }
+function formatHorizon(days) {
+  if (days === 0) return "Прогноз на той самий день";
+  if (Number.isFinite(days)) return `${days} дн.`;
+  return "—";
+}
 function setText(selector, value) { const node = document.querySelector(selector); if (node) node.textContent = value; }
 function formatNumber(value, digits = 1) { return Number.isFinite(value) ? Number(value).toFixed(digits) : "—"; }
 function formatPercent(value) { return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "—"; }
@@ -55,7 +60,7 @@ function renderRows(rows, actual = null) {
     const valueText = Number.isFinite(item.value) ? `${item.value}°C` : "—";
     const actualText = actual == null ? "—" : `${actual}°C`;
     const difference = actual == null || !Number.isFinite(item.value) ? "—" : `${signed(actual - item.value)}°`;
-    row.innerHTML = `<td>${item.date}</td><td>${item.days ? `${item.days} дн.` : "—"}</td><td><strong>${valueText}</strong></td><td>${actualText}</td><td><span class="difference-pill">${difference}</span></td>`;
+    row.innerHTML = `<td>${item.date}</td><td>${item.horizon ?? formatHorizon(item.days)}</td><td><strong>${valueText}</strong></td><td>${actualText}</td><td><span class="difference-pill">${difference}</span></td>`;
     return row;
   }));
 }
@@ -156,7 +161,11 @@ function renderReal() {
   setText("[data-stat='difference']", "—");
   setText("[data-stat='accuracy']", "—");
   setText("[data-actual-label]", "Фактичні дані з’являться після щоденного збору");
-  renderRows(latestRows.map(({ targetDate, temperatureMax }) => ({ date: formatDate(targetDate), value: temperatureMax, days: null })));
+  renderRows(latestRows.map(({ collectionDate, targetDate, temperatureMax }) => ({
+    date: formatDate(targetDate),
+    value: temperatureMax,
+    days: Math.round((Date.parse(`${targetDate}T12:00:00Z`) - Date.parse(`${collectionDate}T12:00:00Z`)) / 86400000),
+  })));
   renderChart(values, labels);
   renderAccuracy(selected.id);
 }
